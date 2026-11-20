@@ -2,6 +2,8 @@
 
 [English](README.md) · [桌面评测](docs/evaluation.md) · [同类项目与借鉴](docs/landscape.md)
 
+[![主分支持续集成](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [v0.1.0 发布标签的测试](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
+
 合作者发来一份已有部分引文的 Word，你手里有旧 EndNote 库和一批 PDF。这个 DeepSeek Harness 插件从 PDF 找到支持具体句子的原文，在旧库副本中复用或补入条目，最后交付**带 EndNote 域的 Word 和与之配套的新库**。交稿后，合作者仍能在 Word 的 EndNote 选项卡中增删引文。
 
 ## 它解决哪个问题

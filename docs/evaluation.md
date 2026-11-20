@@ -1,5 +1,7 @@
 # Native citation evaluation / 桌面端验收
 
+The first hosted run at `a1da89d` failed the rollback test because the test compared a Windows short temporary path with its resolved spelling. The fix resolved both paths before checking containment; the checks for an unmodified source and an unpublished candidate remain in the test. The repaired main commit and release tag are the same SHA, `8f4fb5fed5ce84e56104187c119058b14487932e`. [Initial failure](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44835662135) · [Repair diff](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/commit/8f4fb5fed5ce84e56104187c119058b14487932e) · [Passing main run](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836098912) · [Passing release tag](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
+
 On 2026-11-21, two copies of the same public PDF produced **one new record** in a stock EndNote 21 sample library. Word's official Cite While You Write (CWYW) add-in placed the new citation at the second sentence and kept the first citation. On reopening the delivered pair, the tester removed the new citation with **Edit & Manage Citation(s)**, then inserted the same record again with **Find & Insert My References**. Independent checks of the saved DOCX files recovered both the visible bibliography and the embedded records. [Machine-readable results](evaluation.json) · [中文说明](evaluation.html)
 
 | Saved Word document | Citation positions | Bibliography entries | Records embedded in the citations |

@@ -2,6 +2,8 @@
 
 [中文使用说明](README.zh.md) · [Desktop evaluation](docs/evaluation.md) · [Related projects](docs/landscape.md)
 
+[![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for the v0.1.0 tag](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
+
 A DeepSeek Harness plugin for a familiar handoff: your collaborator sends a partly cited Word draft, you have an older EndNote library and a folder of PDFs, and both of you want to keep using **Edit & Manage Citation(s)** in Word. The plugin delivers an updated library copy and a DOCX containing live EndNote citations. One work can appear at several places in the text while retaining a single bibliography entry.
 
 ## Why build this?
