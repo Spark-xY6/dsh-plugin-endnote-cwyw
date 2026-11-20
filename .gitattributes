@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Native acceptance records the exact script bytes, including line endings.
+skills/**/scripts/*.py -text diff
