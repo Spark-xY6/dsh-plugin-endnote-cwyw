@@ -33,7 +33,7 @@ Before live Word/EndNote automation or failure recovery, read [references/window
 Record the source, backup, EndNote `.enl`, and copied `sdb.eni` paths, sizes, modification times, and SHA-256 hashes. Verify bibliographic identity and target library ID before accepting a record number. Inspect the current document before deciding whether it is static, mixed, or genuine CWYW:
 
 ```powershell
-conda run -n base python -X utf8 <skill-dir>\scripts\audit_cwyw_docx.py `
+python -X utf8 <skill-dir>\scripts\audit_cwyw_docx.py `
   --docx <source.docx> --report <audit-before.json>
 ```
 
@@ -44,7 +44,7 @@ If the document already has genuine fields, never flatten them to text.
 Close EndNote cleanly before copying the database. Copy `<library>.Data\sdb\sdb.eni` into the work directory, hash it, and query only that snapshot:
 
 ```powershell
-conda run -n base python -X utf8 <skill-dir>\scripts\inspect_endnote_snapshot.py `
+python -X utf8 <skill-dir>\scripts\inspect_endnote_snapshot.py `
   --database <copied-sdb.eni> --group "Example group" `
   --record-ids 1,2 --report <endnote-snapshot.json>
 ```
@@ -67,7 +67,7 @@ The record number is the decisive identifier. Keep the author and year aligned w
 Open the exact EndNote library explicitly, confirm it is not an empty `New Library`, and run the formatter on the isolated candidate:
 
 ```powershell
-conda run -n base python -X utf8 <skill-dir>\scripts\format_cwyw.py `
+python -X utf8 <skill-dir>\scripts\format_cwyw.py `
   --input <pre-cwyw.docx> --output <cwyw-candidate.docx> `
   --style "Nature" --expect-main <citation-group-count> `
   --expect-references <unique-reference-count> `
@@ -82,7 +82,7 @@ Run `--preflight-only` first when process state or placeholders are uncertain. T
 Audit the saved package without relying on the automation report:
 
 ```powershell
-conda run -n base python -X utf8 <skill-dir>\scripts\audit_cwyw_docx.py `
+python -X utf8 <skill-dir>\scripts\audit_cwyw_docx.py `
   --docx <cwyw-candidate.docx> --base <frozen-source.docx> `
   --expect-main <citation-group-count> --expect-references <unique-reference-count> `
   --expect-record-ids 123,456 --expect-style "Nature" `

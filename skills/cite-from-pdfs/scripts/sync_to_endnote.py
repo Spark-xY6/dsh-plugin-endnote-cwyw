@@ -34,7 +34,7 @@ from _common import (
     resolve_endnote_exe,
     sdb_path_for_enl,
 )
-from reference_identity import IdentityReview, RecordIndex
+from reference_identity import Identity, IdentityReview, RecordIndex, compare
 
 
 WM_CLOSE = 0x0010
@@ -426,13 +426,28 @@ def plan_import(items, records, preferred=()):
     if len(set(catalog_ids)) != len(catalog_ids):
         raise ValueError("Repeated selection identifier")
     record_index = RecordIndex(records)
-    resolved, pending, aliases = {}, {}, {}
-    for item in items:
+    resolved, pending, aliases, members = {}, {}, {}, {}
+    def add_member(group, item):
+        identity = Identity.from_record(item)
+        group_members = members.setdefault(group, [])
+        if any(compare(identity, member) not in {"doi", "pmid", "title_author_year", "title_variant"}
+               for member in group_members):
+            raise IdentityReview(f"{item['pdf_id']}: not equivalent to every member of proposed group {group[1]}")
+        group_members.append(identity)
+
+    # Classify identified records before title-only variants. A title-only row
+    # must never bridge different DOI/PMID records because it happened to arrive first.
+    def identity_priority(item):
+        identity = Identity.from_record(item)
+        return (-(bool(identity.doi) + bool(identity.pmid)), not bool(item.get("pdf_path")))
+
+    for item in sorted(items, key=identity_priority):
         pdf_id = item["pdf_id"]
         if item.get("identity_review") or item.get("is_retracted"):
             raise IdentityReview(f"{pdf_id}: {item.get('identity_review') or 'retraction flagged'}")
         rid = record_index.match(item, preferred)
         if rid is not None:
+            add_member(("existing", rid), item)
             resolved[pdf_id] = rid
             continue
         if not (
@@ -443,9 +458,13 @@ def plan_import(items, records, preferred=()):
             raise IdentityReview(f"{pdf_id}: missing title, author or 4-digit year")
         alias = RecordIndex(pending).match(item)
         if alias is None:
-            pending[pdf_id] = item
+            pending[pdf_id] = dict(item)
+            add_member(("new", pdf_id), item)
             aliases[pdf_id] = pdf_id
         else:
+            add_member(("new", alias), item)
+            if item.get("pdf_path") and not pending[alias].get("pdf_path"):
+                pending[alias].update(pdf_path=item["pdf_path"], pdf_sha256=item["pdf_sha256"])
             aliases[pdf_id] = alias
     return resolved, pending, aliases
 
@@ -519,21 +538,28 @@ def sync_candidate(source, candidate_dir, items, work_dir, preferred=(), expecte
     }
 
 
-def selected_pdfs(catalog_path, selected_ids):
+def selected_pdfs(catalog_path, selected_ids, work):
     items = json.loads(catalog_path.read_text(encoding="utf-8"))["items"]
     by_id = {item["pdf_id"]: item for item in items}
     if len(by_id) != len(items):
         raise ValueError("Repeated PDF ID in catalog")
     selected = []
-    for key in dict.fromkeys(selected_ids):
+    for n, key in enumerate(dict.fromkeys(selected_ids), 1):
         item = by_id[key]
-        path = Path(item["pdf_path"])
+        path = Path(item["pdf_path"]).resolve(strict=True)
+        if path.suffix.casefold() != ".pdf" or not path.is_file():
+            raise ValueError("Selected catalog entries must refer to PDF files")
         signature = path.stat()
-        if item.get("pdf_sha256") != sha256_file(path):
+        folder = check_work_path(work) / "pdfs" / str(n)
+        folder.mkdir(parents=True, exist_ok=False)
+        frozen = folder / path.name
+        with path.open("rb") as original, frozen.open("xb") as copy:
+            shutil.copyfileobj(original, copy)
+        if item.get("pdf_sha256") != sha256_file(frozen):
             raise RuntimeError(f"PDF changed or catalog lacks a content hash: {path}")
         if path.stat().st_mtime_ns != signature.st_mtime_ns:
             raise RuntimeError(f"PDF changed while validating: {path}")
-        selected.append(item)
+        selected.append({**item, "pdf_path": str(frozen)})
     return selected
 
 
@@ -556,7 +582,7 @@ def main():
         parser.error("Use separate work and candidate directories")
     args.work_dir.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="sync-", dir=args.work_dir))
-    result = sync_candidate(args.enl, args.candidate_dir, selected_pdfs(args.catalog, ids), work)
+    result = sync_candidate(args.enl, args.candidate_dir, selected_pdfs(args.catalog, ids, work), work)
     with args.output.open("x", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
     return 0

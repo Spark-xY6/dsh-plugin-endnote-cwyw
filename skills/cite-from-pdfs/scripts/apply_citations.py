@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["lxml>=5.0.0", "python-docx>=1.1.0", "pywin32>=306"]
+# dependencies = ["lxml>=5.0.0", "python-docx>=1.1.0", "pywin32>=306", "PyMuPDF>=1.24"]
 # ///
 
 """Apply an evidence-backed selection, publishing an updated library copy and genuine CWYW DOCX."""
@@ -21,6 +21,7 @@ from zipfile import ZipFile
 
 from _common import check_work_path, copy_sdb_snapshot, read_endnote_active_records, read_library_id, sdb_path_for_enl
 from inject_placeholders import inject_into_docx
+from placement_evidence import verify_plan_evidence
 from reference_identity import Identity, RecordIndex, compare
 from sync_to_endnote import require_closed_endnote, selected_pdfs, sha256_file, sync_candidate, tree_hashes, verify_library_contents
 
@@ -91,8 +92,9 @@ def apply(args, work, stage):
     groups = read_citations(source)
     existing = [row for group in groups for row in group.records]
     selected = selected_pdfs(
-        args.catalog, [pdf_id for insertion in plan["insertions"] for pdf_id in insertion["pdf_ids"]],
+        args.catalog, [pdf_id for insertion in plan["insertions"] for pdf_id in insertion["pdf_ids"]], work,
     )
+    verified_pages = verify_plan_evidence(plan, selected)
     if not existing and not selected:
         raise ValueError("No genuine or proposed citations to format")
 
@@ -148,6 +150,7 @@ def apply(args, work, stage):
         "native_input_sha256": native_hash, "style": style,
         "require_superscript": require_superscript, "positions": expected_positions,
         "rebound_existing_citations": rebinding, "candidate_pdf_hashes": candidate_pdf_hashes,
+        "verified_pages": verified_pages,
         "before_format": before_format.name, "before_format_sha256": sha256_file(before_format),
         "resolved_sha256": sha256_file(work / "resolved.json"),
         "format_command": command,
@@ -243,6 +246,7 @@ def finalize(work, ready):
         "new_record_ids": sync["new_record_ids"], "before_active_count": sync["before_active_count"],
         "after_active_count": sync["after_active_count"],
         "rebound_existing_citations": ready["rebound_existing_citations"],
+        "verified_pages": ready["verified_pages"],
         "source_sha256": source_hash, "source_library_signature": signature, "word": proof,
     })
 

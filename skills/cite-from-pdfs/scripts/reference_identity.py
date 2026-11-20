@@ -50,8 +50,14 @@ def compare(left: Identity, right: Identity) -> str:
     ):
         ratio = SequenceMatcher(None, compact_left, compact_right, autojunk=False).ratio()
     if same_doi or same_pmid:
-        if doi_conflict or pmid_conflict or (
-            sufficient_title and not same_title and not same_author and ratio < .87
+        shorter, longer = sorted((left.title, right.title), key=len)
+        expanded_title = longer.startswith(shorter + " ")
+        incompatible_attribution = (
+            left.author and right.author and not same_author and left.year and right.year
+            and abs(int(left.year) - int(right.year)) > 1
+        )
+        if doi_conflict or pmid_conflict or incompatible_attribution or (
+            sufficient_title and not same_title and not expanded_title and ratio < .87
         ):
             return "conflict"
         return "doi" if same_doi else "pmid"
