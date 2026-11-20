@@ -42,7 +42,9 @@ class CitationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # Windows runners may return an 8.3 spelling for the temporary directory.
+        # Production paths are resolved before the isolated library is created.
+        self.root = Path(temporary.name).resolve(strict=True)
 
     def test_doi_alias_does_not_change_significant_suffix(self):
         self.assertEqual(normalize_doi("https://doi.org/10.5555%2FDemo-A?view=1"), "10.5555/demo-a")
@@ -202,7 +204,7 @@ class CitationTests(unittest.TestCase):
         destination = self.root / "delivery"
 
         def interrupt(candidate, _import_file):
-            self.assertTrue(candidate.is_relative_to(self.root))
+            self.assertTrue(candidate.resolve(strict=True).is_relative_to(self.root), "candidate is outside the test root")
             self.assertNotEqual(candidate, source)
             candidate.write_bytes(b"interrupted candidate")
             raise RuntimeError("injected import interruption")
