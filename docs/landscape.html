@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>为什么做一个面向 EndNote 的 DeepSeek Harness 插件</title>
+<style>
+:root{color-scheme:light dark;--bg:#fcfbf6;--fg:#1b282a;--muted:#43504e;--link:#075a60;--rule:#bbc9c4}
+@media(prefers-color-scheme:dark){:root{--bg:#17201f;--fg:#f1f1e8;--muted:#c2cec9;--link:#87d7ce;--rule:#53655e}}
+*{box-sizing:border-box}html{background:var(--bg);color:var(--fg);font:17px/1.75 system-ui,"Microsoft YaHei",sans-serif}body{max-width:56rem;margin:auto;padding:clamp(1rem,5vw,4rem)}h1,h2,h3{line-height:1.4}h1{font-size:clamp(1.8rem,4vw,2.7rem);max-width:22em;margin:.25em 0 .65em}h2{font-size:1.45rem;margin:1.6em 0 .5em}h3{font-size:1.1rem;margin:0}p{margin:.55em 0}a{color:var(--link);text-underline-offset:.18em}.scope{color:var(--muted)}section.tool{border-top:1px solid var(--rule);padding:.85rem 0}.refs{font-size:.93rem}li{padding:.25em 0}.closing{border-left:.24rem solid var(--link);padding-left:1rem}a:focus-visible{outline:2px solid var(--link);outline-offset:.18em}
+</style>
+</head>
+<body><main>
+<h1>为什么做一个面向 EndNote 的 DeepSeek Harness 插件</h1>
+<p>合作者给你一份已插入部分引文的 Word、一份较早的 EndNote 库和一批 PDF。同一篇文章有两种题名写法，旧稿里的某个记录号在本地库中又恰好指向另一篇文章。你要补全证据，并把稿子交回给合作者，让对方能在 Word 里继续用 EndNote 增删引文。</p>
+<p>EndNote 把引用的书目信息嵌入 Word，称为“随文文献库”（Traveling Library）。即使找不到原库，Word 也可能显示出正确的引文和参考文献。同一篇论文在不同计算机的库中可能有不同的记录号。因此交付时还需要核实，引用实际连到随稿交付的哪条记录。 <a href="https://docs.endnote.com/docs/endnote/2025/v1/windows/en/content/09word/the_traveling_library.htm">随文文献库</a> · <a href="https://docs.endnote.com/docs/endnote/2025/windows/v1/content/09word/working_on_diffrntcomptrs.htm">在不同计算机上工作</a></p>
+<h2>现有工具能做到哪一步</h2>
+<p class="scope">2026 年 11 月 21 日核对了以下维护者的公开文档。这里比较输入、处理方式和交付物。没有开展同台准确率或速度测试，也没有穷尽所有同类工具。</p>
+<section class="tool"><h3>EndNote 桌面版及其 Word 加载项</h3><p>EndNote 可以从 PDF 的 DOI（论文数字标识符）获取元数据、比较重复条目，并在 Word 的“边写边引”（Cite While You Write，CWYW）加载项中增删引文。已经知道在哪一句引用哪篇文章时，可以直接使用这些原生操作，本项目同样依赖它们。</p><p class="refs"><a href="https://docs.endnote.com/docs/endnote/2025/windows/v1/content/08import/importing_pdf_files.htm">PDF 导入</a> · <a href="https://support.clarivate.com/Endnote/s/article/EndNote-20-Steps-to-remove-duplicates-from-your-EndNote-library?language=en_US">库内去重</a> · <a href="https://docs.endnote.com/docs/endnote/2025/windows/v1/content/09word/editing_citations.htm">编辑引文</a></p></section>
+<section class="tool"><h3>PubMate</h3><p>稿件已经写有 DOI 或 PMID（PubMed 记录编号）时，PubMate 能提取标记、生成导入文件并创建供 EndNote 格式化的临时引文。本项目覆盖更早一步，从稿件中缺少依据的陈述和一组 PDF 开始寻找合适的出处。</p><p class="refs"><a href="https://github.com/jgassens/PubMate">PubMate 工作流程</a></p></section>
+<section class="tool"><h3>endnote-word-cwyw-skill 与 endnote-insert</h3><p>前者把已有编号的参考文献对应到 EndNote X9 导入批次的记录号，再在 Word 里刷新。后者为已经对应到文献的标记直接写入 DOCX 的 EndNote 域。两者说明已有工具能处理“标记转引文”。本项目还要核实稿件中已经存在的活动引文属于目标库的哪条记录，调用原生加载项后再审查稿件副本。</p><p class="refs"><a href="https://github.com/lizhbei1995/endnote-word-cwyw-skill/blob/main/SKILL.md">临时引文方案</a> · <a href="https://github.com/matsuikentaro1/endnote-insert">直接写域的方案</a></p></section>
+<section class="tool"><h3>Zotero 与 DSH 社区的 dsh-zotero</h3><p>Zotero 能识别并合并候选重复条目，用自己的 Word 插件更新引文。dsh-zotero 能从本地 Zotero 库查询笔记、证据片段和引文文本。团队继续维护 Zotero 库时，这条路径很合适。本项目的交付对象是使用指定 EndNote 库的 Word 合作者。</p><p class="refs"><a href="https://www.zotero.org/support/duplicate_detection">Zotero 重复条目</a> · <a href="https://www.zotero.org/support/word_processor_plugin_usage">Zotero Word 插件</a> · <a href="https://github.com/Vncntvx/dsh-zotero/blob/main/docs/getting-started.en.md">dsh-zotero 入门</a></p></section>
+<section class="tool"><h3>JabRef 与 ASySD</h3><p>JabRef 对作者、题名、期刊等字段加权比较，在导入时也能筛选疑似重复条目。ASySD 面向系统综述，可对多来源检索结果去重并返回唯一记录。它们解决了“哪些条目是同一篇文章”。在已有 Word 稿中，还要确保正文多次引用都指向选定的那一条记录。</p><p class="refs"><a href="https://github.com/JabRef/user-documentation/blob/main/en/finding-sorting-and-cleaning-entries/findduplicates.md">JabRef 查重</a> · <a href="https://github.com/camaradesuk/ASySD/blob/master/README.md">ASySD</a></p></section>
+<section class="tool"><h3>Pandoc</h3><p>Pandoc 的 DOCX 引文扩展能把已有 EndNote 域解析为 Pandoc 引文，配合引文处理器可排版引用和文末文献。对从源稿生成出版文档的工作，这很实用。本项目还要求合作者拿到保留活动引文的 Word 和配套 EndNote 库，能再次使用 EndNote 插件修改。</p><p class="refs"><a href="https://pandoc.org/MANUAL.html#extension-citations-docx">读取 DOCX 引文</a> · <a href="https://pandoc.org/MANUAL.html#citations">引文排版</a></p></section>
+<h2>这个项目补上的三个环节</h2>
+<ol><li><strong>给出引用的理由。</strong> 代理阅读 PDF 对应页，在稿件中定位句子，并写下文献支持该句的理由。题名匹配只能帮助确认读到的是哪篇文章。</li>
+<li><strong>让同一篇论文在稿内使用同一条记录。</strong> 对照目标库核实 DOI、PMID 和书目信息；候选条目被确认等价时优先保留稿内已用记录。只有近似题名且缺少有效标识时，需要更多字段佐证。相似文献出现标识冲突时留待复核。旧库中仍可保留其他稿件使用的重复条目。</li>
+<li><strong>成对交付稿件和文献库。</strong> 工作流复制库、核对旧引文、调用 Word 中的 EndNote 加载项，然后检查保存后的引文位置、文献身份和库标识。检查通过才交付；失败时仍能从输入副本重新开始。</li></ol>
+<p class="closing">原生流程需要 Windows 桌面版 Word、兼容的 EndNote 桌面版及其 CWYW 加载项，并需要相应稿件和文献的读取权限。一次端到端实测能验证该组输入的交付结果。跨学科选文准确率、任意文献库的查重召回率，以及各种 Word 样式、脚注和第三方引用系统的兼容性，仍需分别验证。</p>
+<h2 id="adoption">从现有工具借鉴了什么</h2>
+<section class="tool"><h3>先预览，再导入</h3><p>借鉴 PubMate 的预演模式和报告。新预览逐条列出已选 PDF 和 Word 旧引文，显示会复用哪个目标库记录、哪些文献需要新增、多个输入会共用哪一条新记录。遇到身份冲突时，整批进入复核，预计新增条数留空。运行预览只读取关闭状态的库，不启动 Word 或 EndNote。</p><p class="refs"><a href="https://github.com/jgassens/PubMate">PubMate</a></p></section>
+<section class="tool"><h3>把有差异的字段摆在一起</h3><p>借鉴 JabRef 的差异对照和 Zotero 按字段挑选主记录的方式。私有预览分别列出输入文献和候选记录的 DOI、PMID、题名、首位作者、年份、期刊、卷和首页，说明归一化后哪些字段仍然不同。原稿里的旧编号碰巧占用了目标库中另一篇文章的编号时，也能看到两条记录间的差异。预览从临时数据库副本读取数据，报告留在本机，供文档持有人复核。</p><p class="refs"><a href="https://github.com/JabRef/user-documentation/blob/main/en/finding-sorting-and-cleaning-entries/findduplicates.md">JabRef</a> · <a href="https://www.zotero.org/support/duplicate_detection">Zotero</a></p></section>
+<section class="tool"><h3>让读者找到引文所依据的原话</h3><p>dsh-zotero 展示证据片段的来源和注释页码。本项目在每个拟补引位置记录理由、PDF 实际页码和一段原文。导入前重新打开对应 PDF，核对引文确实出现在该页。该段文字能否支持稿件中的论点，还需阅读上下文判断。</p><p class="refs"><a href="https://github.com/Vncntvx/dsh-zotero/blob/main/docs/getting-started.en.md">dsh-zotero</a></p></section>
+</main></body></html>

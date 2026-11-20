@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "date": "2026-11-21",
+  "release": "0.1.0",
+  "platform": {
+    "os": "Windows",
+    "word": "16.0.17932.21140",
+    "endnote": "21.0.0 build 17096",
+    "dsh": "0.2.2-rc.5"
+  },
+  "test_scope": "Native backend with a fixed public evidence plan, isolated community package replay and saved-document edits",
+  "public_inputs": {
+    "source": "EndNote 21 example library plus authored two-paragraph manuscript",
+    "selected_pdf_files": 2,
+    "selected_unique_papers": 1,
+    "physical_page": 2
+  },
+  "preview": {
+    "status": "PASS",
+    "decisions": [
+      "reuse",
+      "new",
+      "alias"
+    ],
+    "new_works": 1
+  },
+  "first_import": {
+    "status": "PASS",
+    "before": 190,
+    "after": 191,
+    "new_records": 1,
+    "verified_page_evidence": 2
+  },
+  "packaged_repeat": {
+    "status": "PASS",
+    "before": 191,
+    "after": 191,
+    "new_records": 0,
+    "verified_page_evidence": 2
+  },
+  "saved_documents": [
+    {
+      "stage": "input",
+      "citation_groups": 1,
+      "references": 1,
+      "embedded_main_fields": 1,
+      "reference_list_fields": 1,
+      "temporary_citations": 0,
+      "record_ids": [
+        60
+      ],
+      "style": "Nature"
+    },
+    {
+      "stage": "delivered",
+      "citation_groups": 2,
+      "references": 2,
+      "embedded_main_fields": 2,
+      "reference_list_fields": 1,
+      "temporary_citations": 0,
+      "record_ids": [
+        60,
+        2470
+      ],
+      "style": "Nature"
+    },
+    {
+      "stage": "removed_with_endnote",
+      "citation_groups": 1,
+      "references": 1,
+      "embedded_main_fields": 1,
+      "reference_list_fields": 1,
+      "temporary_citations": 0,
+      "record_ids": [
+        60
+      ],
+      "style": "Nature"
+    },
+    {
+      "stage": "reinserted_with_endnote",
+      "citation_groups": 2,
+      "references": 2,
+      "embedded_main_fields": 2,
+      "reference_list_fields": 1,
+      "temporary_citations": 0,
+      "record_ids": [
+        60,
+        2470
+      ],
+      "style": "Nature"
+    },
+    {
+      "stage": "packaged_repeat",
+      "citation_groups": 2,
+      "references": 2,
+      "embedded_main_fields": 2,
+      "reference_list_fields": 1,
+      "temporary_citations": 0,
+      "record_ids": [
+        60,
+        2470
+      ],
+      "style": "Nature"
+    }
+  ],
+  "negative_page": {
+    "preview": "REVIEW",
+    "prepare": "FAIL",
+    "published": false
+  },
+  "source_files_unchanged": 7,
+  "source_files_total": 7,
+  "dsh_profile_skills_loaded": 2,
+  "identical_packaged_python_files": 13,
+  "offline_python_cases_passed": 21,
+  "dsh_package_tests_passed": 2,
+  "model_driven_selection_tested": false,
+  "known_limit": "Embedded paragraph breaks in bibliographic metadata can split one visible entry into two paragraphs. The exact-count gate rejects the resulting document."
+}

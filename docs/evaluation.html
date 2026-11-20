@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EndNote 引文从导入到交付的桌面验收</title>
+<style>html{color:#1d3033;background:#fbfaf6;font:17px/1.75 system-ui,"Microsoft YaHei",sans-serif}body{max-width:52rem;margin:0 auto;padding:clamp(1rem,5vw,3.5rem)}h1,h2{line-height:1.35;color:#103b3c}h1{font-size:clamp(1.8rem,4vw,2.6rem);margin:.1em 0 .5em}h2{font-size:1.4rem;margin:1.5em 0 .5em}p{margin:.6em 0}table{border-collapse:collapse;width:100%;font-size:.94em}th,td{text-align:left;border-bottom:1px solid #c8d0cb;padding:.4em .55em}thead{background:#e9f0ec}a{color:#07595b;text-underline-offset:.16em}code{overflow-wrap:anywhere}li{margin:.4em 0}a:focus-visible{outline:2px solid currentColor}@media(max-width:36rem){body{padding:.9rem}th,td{padding:.28em;font-size:.92em}}</style></head>
+<body><main><h1>EndNote 引文从导入到交付的桌面验收</h1>
+<p>2026 年 11 月 21 日，在 EndNote 21 自带示例库中，同一篇公开论文的两份 PDF 只新增了 <strong>1 条记录</strong>。打开交付的 Word 和配套库后，通过 Word 的 EndNote 选项卡删除新引文，文末参考文献由 2 条减到 1 条。随后从库中重新插入同一篇文章，参考文献恢复为 2 条。每一步都保存了文稿，并独立核对了文件中的 EndNote 字段。</p>
+<table><thead><tr><th>已保存的 Word</th><th>正文引文位置</th><th>文末条目</th><th>嵌入的库记录号</th></tr></thead><tbody>
+<tr><td>部分已引用的输入稿</td><td>1</td><td>1</td><td>60</td></tr><tr><td>第一次交付</td><td>2</td><td>2</td><td>60、2470</td></tr><tr><td>在 Word 里删除 Sandve 后</td><td>1</td><td>1</td><td>60</td></tr><tr><td>从配套库重新插入后</td><td>2</td><td>2</td><td>60、2470</td></tr><tr><td>用已安装的发布包再次交付</td><td>2</td><td>2</td><td>60、2470</td></tr></tbody></table>
+<p>每份文件都含 1 个 EndNote 参考文献表字段，临时引文标记均为 0。正文引文保留可编辑的文献资料，参考文献使用 Nature 样式。这里的 60 和 2470 是本次示例库的记录号。</p>
+<h2>从两个 PDF 到一条记录</h2><p>两份文件都来自 Sandve 等人的同一篇论文。只读预览将稿中已有的 Wiegrebe 识别为可复用条目，把第一份 PDF 识别为新增文献，把第二份文件归到同一篇论文。程序核对两份 PDF 第 2 页的引文原话后，实际导入令库中有效记录从 190 变为 191。交付前核对了库身份、引文位置、旧记录、分组与附件。原始稿件及原始库共 7 个文件的 SHA-256 校验值全部吻合。</p>
+<p>第二次使用 DSH 已安装的 npm 包，以原来只有一条引文的稿件配上更新后的库再执行准备、Word 原生格式化和交付。库内记录仍为 191 条，新增 0 条，交付的 Word 仍然只有两条参考文献。</p>
+<p>另一次刻意把一份 PDF 的引文原话改为页面里不存在的句子，预览返回 <code>REVIEW</code>，准备阶段返回 <code>FAIL</code>，没有生成交付目录。原始 7 个文件的校验值仍然吻合。</p>
+<h2>如何复现</h2><ol><li>在本地复制 EndNote 21 安装附带的 <code>Sample_Library_21.enlx</code>，用 EndNote 打开副本并正常关闭，保留恢复出的 <code>.enl</code> 文件及配套 <code>.Data</code> 目录。在此版本示例库中，Wiegrebe（2008）的 <i>An autocorrelation model of bat sonar</i> 是记录 60。使用其他版本时先查实际号码。<a href="https://pubmed.ncbi.nlm.nih.gov/18491168/">文献书目信息</a></li>
+<li>把仓库中 <code>examples/seed.md</code> 的两个段落复制进 Word。用实际记录号更新第一句已有的临时引文，选择 Nature 样式，点击 EndNote 的“Update Citations and Bibliography”，保存成含 1 条活动引文的输入稿。关闭 Word 和 EndNote。</li>
+<li>下载 Sandve 等人的 <i>Ten Simple Rules for Reproducible Computational Research</i>。将 PDF 放入空目录，命名为 <code>01-rules.pdf</code>，再复制为 <code>02-renamed-copy.pdf</code>。交给技能的输入是这个 PDF 目录、还原的示例库和上一条保存的 Word。示例计划 <code>examples/plan.json</code> 对应的引文依据是物理第 2 页的 Rule 1。<a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1003285">论文与 PDF</a></li>
+<li>预览并运行到新目录。另复制一份交付 Word 和完整配套库，先打开库，再打开 Word。使用“Edit &amp; Manage Citation(s)”移除 Sandve 并保存。恢复到第二句的原引文位置，用“Insert Citation”找到该条目并重新插入，刷新后另存。用 <code>audit_cwyw_docx.py</code> 分别核对保存的文件。</li></ol>
+<h2>适用范围</h2><p>实测环境为 Windows、Word 16.0.17932.21140 和 EndNote 21.0.0 build 17096。DeepSeek Harness 0.2.2-rc.5 在隔离配置中实际加载了两个技能。已安装包内 13 个 Python 文件与受审版本逐一哈希吻合，21 项离线 Python 测试和 2 项 DSH 插件测试全部通过。桌面测试采用此处固定的公开引文计划。该隔离配置没有 DeepSeek API 密钥，本次无法衡量模型自行选文献或定位论据的准确率。只有两句话、一篇新增论文的示例也无法估计面向各学科的去重准确率和召回率。</p>
+<p>示例库另有一条 Yovel（2008）记录，其 DOI 字段中有换行。Word 在 Nature 样式下将一条文末记录排为两个段落，严格要求一条记录的计数核验会拒绝这类结果。其他样式、脚注或复杂版式需按实际文稿验收。公开仓库只提供自写的样例文本、计划与汇总结果，原始桌面审计、文档、商业软件和示例数据库分别保留在测试机或原始发行方。</p>
+</main></body></html>

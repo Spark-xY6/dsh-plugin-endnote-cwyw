@@ -1,0 +1,32 @@
+# Native citation evaluation / 桌面端验收
+
+On 2026-11-21, two copies of the same public PDF produced **one new record** in a stock EndNote 21 sample library. Word's official Cite While You Write (CWYW) add-in placed the new citation at the second sentence and kept the first citation. On reopening the delivered pair, the tester removed the new citation with **Edit & Manage Citation(s)**, then inserted the same record again with **Find & Insert My References**. Independent checks of the saved DOCX files recovered both the visible bibliography and the embedded records. [Machine-readable results](evaluation.json) · [中文说明](evaluation.html)
+
+| Saved Word document | Citation positions | Bibliography entries | Records embedded in the citations |
+| --- | ---: | ---: | --- |
+| Partially cited input | 1 | 1 | Wiegrebe `#60` |
+| Delivered file | 2 | 2 | Wiegrebe `#60`, Sandve `#2470` |
+| After removing Sandve in Word | 1 | 1 | Wiegrebe `#60` |
+| After reinserting Sandve in Word | 2 | 2 | Wiegrebe `#60`, Sandve `#2470` |
+| Output from installed-package replay | 2 | 2 | Wiegrebe `#60`, Sandve `#2470` |
+
+Each saved file passed its expected group count, bibliography count, embedded identity and Nature-style checks. Each contained one EndNote bibliography field and zero temporary citations. Record numbers here describe this sample library.
+
+* **First pass.** The preview identified one existing citation to reuse, one new article and a second filename for that article. The physical-page checks succeeded for both filenames. EndNote imported one record, taking the active count from 190 to 191. The final audit verified the target library, citation positions, original library records, groups and attachments. Seven frozen input files, including the DOCX and the complete original library pair, retained their original SHA-256 values.
+* **Installed-package replay.** The isolated DSH installation loaded the npm tarball; all 13 packaged Python files matched the reviewed source hashes. The installed prepare, format and publish commands then ran on the same original one-citation manuscript with the updated 191-record library. They produced a second valid document, 191 records and **zero additional imports**.
+* **Failure case.** Replacing one quoted excerpt with text absent from the selected page made the preview return `REVIEW` and preparation return `FAIL`. No delivery directory appeared and the seven source hashes still matched.
+* **Host and model scope.** DeepSeek Harness `0.2.2-rc.5` loaded both skills in a real isolated profile. The offline Python suite passed 21 of 21 cases and both DSH package tests passed. The native run used the fixed public evidence plan shown in the example. The isolated profile had no DeepSeek API key, so this evaluation does not measure autonomous model decisions or model citation accuracy. The native host was Windows with Word `16.0.17932.21140` and EndNote `21.0.0` build `17096`.
+
+## Reproduce the inputs
+
+1. On Windows with a licensed copy of Word and EndNote 21, copy the supplied `Sample_Library_21.enlx` from EndNote's Examples folder into a new work directory. Open the copied archive with EndNote to restore it, then close EndNote normally. Keep both the restored `.enl` and its sibling `.Data` directory. The tested edition contains 190 active references and two trashed records. Look up Wiegrebe (2008), *An autocorrelation model of bat sonar*, DOI `10.1007/s00422-008-0216-2`. This edition assigns it record 60. Other libraries may assign a different number. [PubMed record](https://pubmed.ncbi.nlm.nih.gov/18491168/)
+2. Copy the two paragraphs from `examples/seed.md` into Word. Match the temporary record number to the one in your restored library. Select the Nature style and use EndNote's **Update Citations and Bibliography** to format the first reference. Save the DOCX, then close Word and EndNote. The input should have one editable in-text citation and one bibliography entry.
+3. Download Sandve et al. (2013), *Ten Simple Rules for Reproducible Computational Research*, from the publisher. Place its PDF in an empty folder as `01-rules.pdf`, then copy the same bytes to `02-renamed-copy.pdf`. The PDF used in this run had SHA-256 `35648a3880bdd8bf30e8212a3847b7bd35f504ee5ccbd1ad3856d206acd181db`. The public example plan cites Rule 1 on physical page 2. [Publisher's article and PDF](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1003285)
+4. Give the three paths to the installed skills. For a controlled test, use `examples/plan.json` when the index assigns `P001` and `P002` to the two files. Use new work and delivery directories outside the input library. The expected change is one new library record, one additional citation group, and one additional bibliography entry. A bibliographic match and a matching excerpt are both required. A reader can evaluate whether Rule 1 supports the second sentence.
+5. Copy the delivered Word file and the **entire** delivered library pair into a separate edit-test directory. Open its `.enl`, then its DOCX. Under Word's EndNote tab open **Edit & Manage Citation(s)**, remove the Sandve citation, update the bibliography and save a copy. Use **Insert Citation** to find Sandve in the target library, reinsert it at the second sentence, update and save another copy. Independently audit both DOCX files with `audit_cwyw_docx.py`. Check unique record IDs, embedded reference metadata, exactly one bibliography field and zero temporary citations in addition to the visible numbers.
+
+## Scope
+
+This example uses a two-sentence authored fixture, a public paper and Clarivate's locally restored sample library. The repository includes the fixture text and plan. Users obtain the commercial software and example library from their own installation and the paper from its publisher. Local paths, native library IDs, raw audit files and desktop documents stay on the test machine.
+
+The Nature style normally produces one bibliography paragraph per entry in this test. An additional sample record, Yovel (2008), contains an embedded carriage return in its DOI metadata. Word rendered a single entry as two bibliography paragraphs. The paragraph-count check rejected that fixture when exactly one reference was required. Other styles, layouts, and unrelated collections require their own acceptance tests. This small case does not estimate deduplication precision, recall, or accuracy of claim-to-paper selection across manuscripts.

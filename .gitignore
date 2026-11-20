@@ -27,7 +27,11 @@ delivery/
 citation-run-*/
 catalog*.json
 plan*.json
+!examples/plan.json
 ready.json
+private-review*.json
+preview*.json
+search*.json
 audit.json
 format.json
 resolved.json

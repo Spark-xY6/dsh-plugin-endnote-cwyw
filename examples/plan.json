@@ -1,0 +1,16 @@
+{
+  "style": "Nature",
+  "insertions": [
+    {
+      "insertion_id": "C01",
+      "anchor_text": "Record the exact steps used to produce each computational result.",
+      "position": "before_terminal_punct",
+      "pdf_ids": ["P001", "P002"],
+      "sources": [
+        { "pdf_id": "P001", "page": 2, "quote": "keep track of how it was produced." },
+        { "pdf_id": "P002", "page": 2, "quote": "keep track of how it was produced." }
+      ],
+      "rationale": "Sandve et al. (2013), Rule 1, PDF p. 2. Both filenames identify the same article."
+    }
+  ]
+}
