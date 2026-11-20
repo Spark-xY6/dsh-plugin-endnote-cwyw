@@ -1,0 +1,7 @@
+# Isolate discovery from the operator's own user and project skill directories.
+- id: skill-filesystem
+  config:
+    includeDefaultRoots: false
+- insert:
+    - id: endnote-profile-acceptance
+      name: ./dsh-profile-probe.mjs
