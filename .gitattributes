@@ -1,3 +1,6 @@
 * text=auto eol=lf
 # Native acceptance records the exact script bytes, including line endings.
 skills/**/scripts/*.py -text diff
+# The frozen protocol and verification record cite the hashes of these original bytes.
+benchmarks/source-manifest.json -text diff
+benchmarks/record-results.json -text diff

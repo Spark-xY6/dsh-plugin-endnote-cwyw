@@ -1,10 +1,12 @@
 # PDF citations for EndNote and Word
 
-[中文使用说明](README.zh.md) · [Desktop evaluation](docs/evaluation.md) · [Related projects](docs/landscape.md)
+[中文使用说明](README.zh.md) · [Controlled comparison](docs/comparison.md) · [Desktop evaluation](docs/evaluation.md) · [Related projects](docs/landscape.md)
 
 [![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for the v0.1.0 tag](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
 
 A DeepSeek Harness plugin for a familiar handoff: your collaborator sends a partly cited Word draft, you have an older EndNote library and a folder of PDFs, and both of you want to keep using **Edit & Manage Citation(s)** in Word. The plugin delivers an updated library copy and a DOCX containing live EndNote citations. One work can appear at several places in the text while retaining a single bibliography entry.
+
+**Desktop limitation in v0.1.0.** Use a dedicated Windows session with only the test library for native import and formatting. EndNote can open multiple library windows in one process. We found that this version can direct an import or a close action to an unintended library window. The shared-desktop trial stopped before either action. [Measured scope and limitations](docs/comparison.md)
 
 ## Why build this?
 
@@ -37,7 +39,9 @@ Restart the profile after installation. The bundle registers **cite-from-pdfs** 
 
 On the supplied EndNote 21 sample library, selecting two filenames for the same public paper added **one** record (190 → 191). Reopening the delivery, removing that paper in Word and reinserting it changed the saved bibliography counts **2 → 1 → 2**. Running again with the updated library added **zero** records (191 → 191).
 
-GitHub Actions checks package registration and regression cases using synthetic inputs. The desktop evaluation runs the licensed applications with a fixed evidence plan, then tests the saved documents before and after edits. It also checks what happens when the same article is selected again. Model-driven selection of papers from a previously unseen collection needs separate evaluation. [Desktop results](docs/evaluation.md) · [GitHub Actions](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions)
+Four fresh sessions of the same Codex model then received the same unmarked five-paragraph draft and four PDFs. Both runs **with the skills** and both **without them** selected all three supported sites, left the fabricated trial uncited and delivered four live citations linked to three entries. Both skill runs also included the two newly cited PDFs in the delivered library. Neither bare run included them. This is one manuscript. The isolated DSH profile was checked for package loading separately. [Controlled comparison and replication materials](docs/comparison.md) · [Desktop results](docs/evaluation.md)
+
+On two external bibliographic datasets without DOI or PMID, the plugin's automatic duplicate-pair recall was 93.1% and 57.6%. BibDedupe 0.11.0 achieved 99.6% and 83.0%. Both produced zero false automatic matches against these labels. The comparative report also covers three EndNote utilities run on the same original draft and on inputs with hand-supplied markers. GitHub Actions checks registration and synthetic regressions. [Comparison](docs/comparison.md) · [GitHub Actions](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions)
 
 The automatic route is for genuine EndNote fields in the document body. Hand-typed numbers, Zotero or Mendeley fields, citations inside notes, and custom citation display overrides require separate review. The agent judges whether a passage supports a claim. The software verifies the quoted words on the specified physical PDF page. It indexes searchable text from up to the first twelve pages; the agent can read later pages directly. Image-only scans need readable text for quote verification. The project has no cross-corpus accuracy estimate.
 

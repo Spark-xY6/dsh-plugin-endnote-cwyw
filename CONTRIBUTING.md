@@ -16,4 +16,6 @@ python -B -m unittest discover -s tests -p "test_*.py" -v
 
 Work with a Python environment you control. Never attach libraries, manuscripts, full-text collections, screenshots with account details, or unredacted catalog/preview/audit JSON to public issues. An EndNote Traveling Library lives inside a DOCX and can disclose records even when visible text looks anonymous. An aggregate count or a short invented example usually reproduces the problem.
 
-Code contributions use the project MIT license. Include original source and license notices for any new third-party code. See [desktop evaluation](docs/evaluation.md).
+To contribute a comparison, give the same unmarked manuscript, old library and PDFs to independent sessions with and without the skills. Freeze the scoring key first. Report exact evidence pages, original and final library counts, target-record identity at each position, and the result after reopening, removing and reinserting a citation. For an existing utility, include a second run with the markers or mappings requested in its documentation. Publish aggregate outcomes and fixture construction instructions. [Frozen protocol](benchmarks/protocol.json) · [Comparative results](docs/comparison.md)
+
+Code contributions use the project MIT license. Include original source and license notices for any new third-party code. [Desktop evaluation](docs/evaluation.md)

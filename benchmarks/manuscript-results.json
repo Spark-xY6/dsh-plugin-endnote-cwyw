@@ -1,0 +1,63 @@
+{
+  "plugin_release": "v0.1.0",
+  "solver_model": "gpt-6.2-astra",
+  "solver_host": "Codex",
+  "native_host": "Windows, Word 16 and EndNote 21",
+  "distinct_manuscripts": 1,
+  "initial_library_repetitions_per_condition": 2,
+  "gold_and_protocol_frozen_before_first_solver": true,
+  "exploratory_library_substitution": {
+    "same_manuscript_and_four_pdfs": true,
+    "frozen_utc": "2026-11-21T00:19:22Z",
+    "closed_target_sdb_sha256": "aba73fd86e77b64b8a7709fe93ce55d7e3c5eaa8600a3116bfcc3afc626a305f",
+    "tagged_seed_sha256": "d2cf9727933fa836c1afedd1096e194ac8985f4f201136b291a31c08652760f1",
+    "matched_input_files": 8,
+    "active_before": 60,
+    "trash_before": 0,
+    "distinct_library_ids_verified": true,
+    "old_field_record": 60,
+    "old_field_work": "Wiegrebe",
+    "different_target_work_at_60": "Gorresen",
+    "correct_target_record_for_wiegrebe": 1,
+    "target_sandve_variant_without_doi": 2,
+    "wilson_in_target_before": false,
+    "v0_1_0_skills_F": {
+      "source_supported_placements": 3, "correct_abstentions": 1,
+      "frozen_placement_plan_sha256": "585ee9abacf98c1279e88965c5f8224da8506a1445411ab407aaee61c20d6ed0",
+      "solver_metadata_sha256": "b1198c7cae6b29431eca1de491e5fd1f287ac986ab424a948c3255976b97d5cc",
+      "source_files_preserved": 8,
+      "primary": "no delivery",
+      "native_actions_dispatched": 0,
+      "reason": "Shared-desktop library-window isolation failed code safety review",
+      "postdelivery_edit": "not assessable"
+    }
+  },
+  "initial_library": {
+    "active_before": 190,
+    "trashed_before": 2,
+    "all_four_deliveries": {
+      "source_files_unchanged_out_of_11": 11,
+      "original_library_rows_unchanged_out_of_192": 192,
+      "original_attachment_files_and_links_preserved_out_of_3": 3,
+      "group_memberships_and_definitions_preserved_out_of_12": 12,
+      "group_ids_with_updated_recs_stamp": [6, 12],
+      "paragraphs_preserved_out_of_5": 5,
+      "correct_new_claim_to_page_links_out_of_3": 3,
+      "unsupported_claims_correctly_left_uncited_out_of_1": 1,
+      "active_after": 192,
+      "trashed_after": 2,
+      "record_ids_by_claim": [[60], [2470], [2471], [2470], []],
+      "visible_citation_numbers_by_claim": [[1], [2], [3], [2], []],
+      "bibliography_entries": 3,
+      "bibliography_fields": 1,
+      "temporary_citations": 0,
+      "all_four_main_citations_bound_to_target": true
+    },
+    "runs": [
+      {"arm":"A","condition":"bare","repetition":1,"primary":"pass","docx_sha256":"4e922b7d99719d553694fe0216c09221c1947fb8385c815cbe736a2ff94ca24e","new_articles_with_byte_verified_pdf_link":0,"retained_helper_sources":6,"retained_helper_source_bytes":8795,"whole_session_seconds":396},
+      {"arm":"B","condition":"skills","repetition":1,"primary":"pass","docx_sha256":"eaa6228f56016b52d97ca8eebb2ff0b1ff6a8a3732dd7ee5c8e3cacffaad7c04","new_articles_with_byte_verified_pdf_link":2,"retained_helper_sources":1,"retained_helper_source_bytes":2111,"whole_session_seconds":443},
+      {"arm":"C","condition":"bare","repetition":2,"primary":"pass","docx_sha256":"7ad9f7a4487f14b954383e31ef8c45bed7cebf523fb3e9fa071d0adafe65478f","new_articles_with_byte_verified_pdf_link":0,"retained_helper_sources":9,"retained_helper_source_bytes":10400,"whole_session_seconds":361},
+      {"arm":"D","condition":"skills","repetition":2,"primary":"pass","docx_sha256":"f9807d4d8a2055f691cf23639eb1ce75e1a0ae8319f836c209e3d2d9eccbf363","new_articles_with_byte_verified_pdf_link":2,"retained_helper_sources":0,"retained_helper_source_bytes":0,"whole_session_seconds":313}
+    ]
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "bib_dedupe": "0.11.0",
+  "pandas": "2.3.3",
+  "datasets": {
+    "stroke": {
+      "records": 1292,
+      "possible_pairs": 833986,
+      "gold_pairs": 479,
+      "source_sha256": {
+        "records_pre_merged.csv": "a1ea76cdfe5c0fa98896fec8fa74d116deac3b20e06a67ba7a288b787c7793ed",
+        "merged_record_ids.csv": "f932a243ef78d5909d2a8c23a2db7c440de7b8bf732c80d351366aaec10e0987"
+      },
+      "plugin_pairwise": {
+        "automatic_pairs": 446,
+        "tp": 446,
+        "fp": 0,
+        "fn": 33,
+        "tn": 833507,
+        "precision": 1.0,
+        "recall": 0.9311064718162839,
+        "review_pairs": 57,
+        "gold_pairs_in_review": 19
+      },
+      "bibdedupe_clusters": {
+        "automatic_pairs": 477,
+        "tp": 477,
+        "fp": 0,
+        "fn": 2,
+        "tn": 833507,
+        "precision": 1.0,
+        "recall": 0.9958246346555324,
+        "review_pairs": 104,
+        "gold_pairs_in_review": 2
+      },
+      "bibdedupe_direct": {
+        "automatic_pairs": 477,
+        "tp": 477,
+        "fp": 0,
+        "fn": 2,
+        "tn": 833507,
+        "precision": 1.0,
+        "recall": 0.9958246346555324,
+        "review_pairs": 104,
+        "gold_pairs_in_review": 2
+      }
+    },
+    "haematology": {
+      "records": 1415,
+      "possible_pairs": 1000405,
+      "gold_pairs": 165,
+      "source_sha256": {
+        "records_pre_merged.csv": "c8ec567898eb90ef53bbd9db3924ecbebd4eb6efbe2bca4fa28bda2f893cb8b7",
+        "merged_record_ids.csv": "b874b2de2ee7d62a2637817c8b26a77de42fb1fc0bbae4e8fed3de475775a16d"
+      },
+      "plugin_pairwise": {
+        "automatic_pairs": 95,
+        "tp": 95,
+        "fp": 0,
+        "fn": 70,
+        "tn": 1000240,
+        "precision": 1.0,
+        "recall": 0.5757575757575758,
+        "review_pairs": 136,
+        "gold_pairs_in_review": 23
+      },
+      "bibdedupe_clusters": {
+        "automatic_pairs": 137,
+        "tp": 137,
+        "fp": 0,
+        "fn": 28,
+        "tn": 1000240,
+        "precision": 1.0,
+        "recall": 0.8303030303030303,
+        "review_pairs": 633,
+        "gold_pairs_in_review": 28
+      },
+      "bibdedupe_direct": {
+        "automatic_pairs": 135,
+        "tp": 135,
+        "fp": 0,
+        "fn": 30,
+        "tn": 1000240,
+        "precision": 1.0,
+        "recall": 0.8181818181818182,
+        "review_pairs": 635,
+        "gold_pairs_in_review": 30
+      }
+    }
+  }
+}

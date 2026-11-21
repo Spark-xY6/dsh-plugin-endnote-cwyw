@@ -6,7 +6,7 @@ EndNote already supplies the essential technology. Its Word add-in stores biblio
 
 ## Which existing tools fit which job?
 
-The comparisons below cover the workflows described by their maintainers, checked on 2026-11-21. They are documentation comparisons. We did not benchmark the competing tools, measure relative accuracy, or establish that comparable integrations do not exist.
+The table covers the workflows described by their maintainers, checked on 2026-11-21. A companion study ran three of the EndNote utilities on the same draft, tested a dedicated deduplicator on two external datasets, and compared fresh agent sessions with and without these skills. [Measured comparison](comparison.md)
 
 | Tool | Task covered by its documentation | How that maps to this project's use case |
 | --- | --- | --- |

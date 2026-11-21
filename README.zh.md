@@ -1,6 +1,8 @@
 # 用 PDF 文献库为 Word 增补可编辑的 EndNote 引文
 
-[English](README.md) · [桌面评测](docs/evaluation.md) · [同类项目与借鉴](docs/landscape.md)
+[English](README.md) · [裸跑与开源工具对照](docs/comparison.md) · [桌面评测](docs/evaluation.md) · [同类项目与借鉴](docs/landscape.md)
+
+**v0.1.0 桌面使用限制。** 原生导入与排版需要独占的 Windows 会话，且只打开测试用的库。EndNote 能在同一进程中打开多个库窗口，本版可能将导入或关闭操作发给另一个库窗口。共享桌面对照已在发出这些操作前停止。[对照结果与适用范围](docs/comparison.md)
 
 [![主分支持续集成](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [v0.1.0 发布标签的测试](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
 
@@ -35,7 +37,9 @@ dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.0
 
 在 EndNote 21 随附示例库上，同一篇公开论文以两个文件名被选中，库从 **190 条增至 191 条**。重开 Word 删除这篇、再插回，三个已保存版本的参考文献数为 **2 → 1 → 2**。改用交付库重跑后仍是 **191 条**，新增为零。
 
-公开仓库的 GitHub Actions 用合成材料验证包加载、去重和失败保护。桌面验收给定一份能逐页核对的引用计划，在装有许可证的 Word 和 EndNote 中执行，并检查交付后删除、重新插入的结果。模型面对陌生稿件时自动选文献的准确率仍待单独评测。具体样例、测试数字与复现步骤见评测记录。[原生桌面评测](docs/evaluation.html) · [持续集成](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions)
+四个独立的 Codex 会话随后拿到同一份未标注的五段稿件、四份 PDF 和旧库。使用技能的两次和裸跑的两次均找对三处引文，给缺乏依据的试验数字留空，交付了四个可编辑引文和三条书目。技能组两次都把两篇新引论文的 PDF 随库交付，裸跑两次都没有附进库中。四次运行共用一篇稿件。DSH 宿主另行验证了插件加载。[对照结果与复现方法](docs/comparison.md) · [原生桌面评测](docs/evaluation.html)
+
+在两个缺 DOI 和 PMID 的公开书目数据集上，本插件自动识别重复对的召回率分别为 93.1% 和 57.6%，专用工具 BibDedupe 分别为 99.6% 和 83.0%。按公开标签核对，两者自动判重均为零误合并。报告也记录了三种开源 EndNote 工具在原稿和人工标记稿上的实际输出。GitHub Actions 用合成材料验证包加载、去重和失败保护。[详细比较](docs/comparison.md) · [持续集成](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions)
 
 自动流程适合正文中已有真正 EndNote 引文的 Word。手打编号、其他引文插件、脚注引文和定制的显示格式需要单独核对。PDF 索引最多读取前 12 页，有需要时可以直接查阅后续页。扫描件需要可提取的文字。软件能验证指定页确有这段话，论点与引文是否相符仍由代理和作者判断。
 

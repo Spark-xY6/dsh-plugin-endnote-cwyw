@@ -1,0 +1,57 @@
+[
+  {
+    "path": "draft.docx",
+    "sha256": "460aa6ca2604bb317ee2e6f13002dd4e450d4d9d13fbb05a96f4d13df0623948",
+    "bytes": 15682
+  },
+  {
+    "path": "library/References.Data/PDF/1588206219/Hominid Evolution.xls",
+    "sha256": "1df3526607d53edd5994b1863c2db05828e31a8adc5594120d75ab1df4fff9af",
+    "bytes": 17408
+  },
+  {
+    "path": "library/References.Data/PDF/3286800528/pone.0205150.pdf",
+    "sha256": "43a071295e9dad984cc1cefcf705af0fa8ce1739ebbda7c74176e5070ee798a1",
+    "bytes": 615792
+  },
+  {
+    "path": "library/References.Data/PDF/3293444194/pone.0065794.pdf",
+    "sha256": "61ab334d9a4452ca1b31a697205ad531ec26e91dbb1e5880890c2934ae4f96ba",
+    "bytes": 159274
+  },
+  {
+    "path": "library/References.Data/sdb/pdb.eni",
+    "sha256": "3341da063c82d395adbf625643ac9b6edfda1c41d2465383cf6929484666fdea",
+    "bytes": 147456
+  },
+  {
+    "path": "library/References.Data/sdb/sdb.eni",
+    "sha256": "f2bc954165b91de57c635683267cfdf0ad28ca979945204de160b4f329c43c86",
+    "bytes": 704512
+  },
+  {
+    "path": "library/References.enl",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  {
+    "path": "papers/article-01.pdf",
+    "sha256": "35648a3880bdd8bf30e8212a3847b7bd35f504ee5ccbd1ad3856d206acd181db",
+    "bytes": 131527
+  },
+  {
+    "path": "papers/article-02.pdf",
+    "sha256": "ed60d4b71c36d650757c7adfe1d52afb5b6b125b7b747f74f79d5ad80e94c017",
+    "bytes": 2061591
+  },
+  {
+    "path": "papers/article-03.pdf",
+    "sha256": "43a071295e9dad984cc1cefcf705af0fa8ce1739ebbda7c74176e5070ee798a1",
+    "bytes": 615792
+  },
+  {
+    "path": "papers/article-04.pdf",
+    "sha256": "35648a3880bdd8bf30e8212a3847b7bd35f504ee5ccbd1ad3856d206acd181db",
+    "bytes": 131527
+  }
+]

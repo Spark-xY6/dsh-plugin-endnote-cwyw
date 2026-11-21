@@ -1,0 +1,220 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EndNote 插件对照评测</title><style>
+*{box-sizing:border-box}body{color:#20323a;background:#fff;margin:auto;padding:1rem clamp(1rem,3vw,3rem) 3rem;max-width:75rem;font:17px/1.65 system-ui,sans-serif}
+h1,h2,h3{color:#14394b;line-height:1.32;margin:1.5em 0 .6em}h1{font-size:clamp(1.65rem,4vw,2.35rem)}h2{border-bottom:1px solid #cad9dc;padding-bottom:.28em}
+a{color:#115778;text-underline-offset:.15em}p,li{max-width:88ch}pre{background:#f0f4f5;padding:.8em;white-space:pre-wrap;overflow-wrap:anywhere}
+code{font-size:.9em;overflow-wrap:anywhere}table{border-collapse:collapse;margin:1em 0;width:100%;font-size:.92em}th,td{padding:.5em .55em;text-align:left;border:1px solid #c2d2d5;vertical-align:top}
+th{background:#eaf1f2}tbody tr:nth-child(even){background:#f8fafb}.scroll{overflow-x:auto}p,li,td{overflow-wrap:anywhere}
+</style></head><body><main><h1>给同一篇 Word 稿补引文，使用插件能多做什么？</h1>
+<p>在同一篇五段稿件上，两次使用插件、两次只用普通工具，四个独立的 Codex 会话都找到了正确的论文和页码，都保留了缺乏依据的句子并标明缺证。四份交付都把 190 条记录增至 192 条，在 Word 中保存了四处真实 EndNote 引文、三条文末参考文献。插件组还各把两篇新增论文的 PDF 存入了交付库，普通工具组两次都没有随库附入这两个 PDF。这个小样本能检验具体工作步骤；同一篇稿件反复成功，仍不能估计其他稿件的成功率。</p>
+<p>外部去重数据给出另一条采用边界。直接调用插件的记录匹配规则，在卒中和血液学两套数据上自动找回了 93.1% 和 57.6% 的已标注重复对。专门做书目去重的 BibDedupe 在相同数据上分别找回 99.6% 和 83.0%。两者自动接受的记录对中都没有观测到误合并。对于希望找齐大量历史重复记录的维护者，应把下文的漏检和待复核工作量一起考虑。<a href="../benchmarks/record-results.json">逐项结果</a></p>
+<h2>同稿、同模型、同桌面</h2>
+<p>被测版本为插件 v0.1.0。四个会话都使用同一模型 <code>gpt-6.2-astra</code>、同一台 Windows 上的 Word 和 EndNote 21，以及逐字相同的任务。每次都从同一组输入文件的独立副本开始。代理自行读文献、找位置、建库和处理 Word，均可编写临时代码、使用本机自动化及公开书目检索服务。普通工具组按指令不打开、不使用引用技能。插件组额外获得本项目的两个技能和配套脚本。各会话未继承评测对话，也未获得答案或预制插入计划。宿主可能展示已安装技能的名称，限制依靠操作指令实施，不能视为技术强制隔离或双盲。DSH 的独立配置缺少 DeepSeek API 凭据，因而本节衡量的是 Codex 代理使用这些技能的表现。DSH 的安装和真实宿主加载另有公开测试。<a href="../benchmarks/protocol.json">原始任务、资源与计分规则</a> · <a href="https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/releases/tag/v0.1.0">发布版本</a> · <a href="evaluation.md">DSH 与 Word 发布验收</a></p>
+<p>评测前冻结了两次配对和答案。第一轮普通工具组先使用桌面，第二轮插件组先用。每次目标上限均为 18 分钟主动求解，等待其他会话使用 Word 和等待批准的时间不计入预算。一个会话交付文件即停止，评测者不替它修稿。下表是四次完整会话的实际墙钟时间，包含等待、审批和汇报。临时脚本数统计交付目录下留存的源文件，其中包含自检脚本，未写成文件的临时命令不计。这是事后描述，不能据此折算人时或费用。</p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>会话</th>
+<th>轮次与条件</th>
+<th style="text-align: right;">新增引文选文、页码正确</th>
+<th style="text-align: right;">缺证句正确留空</th>
+<th>交付库有效记录</th>
+<th>正文引文处数 / 文末篇数</th>
+<th style="text-align: right;">随库新增全文</th>
+<th style="text-align: right;">留存临时脚本 / 字节</th>
+<th style="text-align: right;">墙钟秒</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>第一轮，普通工具</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">1/1</td>
+<td>190 → 192</td>
+<td>4 / 3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6 / 8,795</td>
+<td style="text-align: right;">396</td>
+</tr>
+<tr>
+<td>B</td>
+<td>第一轮，使用插件</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">1/1</td>
+<td>190 → 192</td>
+<td>4 / 3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1 / 2,111</td>
+<td style="text-align: right;">443</td>
+</tr>
+<tr>
+<td>C</td>
+<td>第二轮，普通工具</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">1/1</td>
+<td>190 → 192</td>
+<td>4 / 3</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">9 / 10,400</td>
+<td style="text-align: right;">361</td>
+</tr>
+<tr>
+<td>D</td>
+<td>第二轮，使用插件</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">1/1</td>
+<td>190 → 192</td>
+<td>4 / 3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0 / 0</td>
+<td style="text-align: right;">313</td>
+</tr>
+</tbody>
+</table></div>
+<p>第一轮使用插件多用 47 秒，第二轮少用 48 秒，没有一致的速度优势。两轮插件组都留存了更少的一次性脚本。每次交付的独立核查均找回原有五段文字和各段正确的文献身份，四个 <code>EN.CITE</code> 引文字段都含可读的文献元数据，另有一个 <code>EN.REFLIST</code> 文末参考文献字段，临时引文残留为零。同一篇 Sandve 在正文出现两次，只占一条库记录和一条文末条目。每次均核对 11/11 个输入文件的哈希、192/192 条原始记录行（190 条有效、2 条在回收站）、3/3 份原有附件，全部相同。12/12 个分组的标识、定义与成员均保留，原始分组表中仅两个分组的 <code>recs_stamp</code> 字段变化。新增全文附件是事后记录的差异，未计入预定的交付成功判据。</p>
+<h3>重开后能否删引文并再次插入</h3>
+<p>预定挑战只删除 Wilson，刷新书目并保存，再在同一位置插回同一篇论文，刷新、保存并重开。预期正文引文处数为 4 → 3 → 4，文末篇数为 3 → 2 → 3。A、C 求解会话在各自的测试副本中实际完成了这一操作。独立评测者核实四份交付稿的起始状态，第一次统一重测遇到 Word 自动化异常。修订后的测试程序已通过代码审查，桌面同时存在另一项工作的文献库时暂停执行。此时统一的编辑挑战在四组中均未计分。另一个固定计划示例已有完整的原生删引与重插记录。<a href="evaluation.md">固定计划原生编辑证据</a> · <a href="../benchmarks/manuscript-results.json">四组实物核查计数</a></p>
+<h3>怎样复现同一篇稿件</h3>
+<ol>
+<li>从本机合法安装的 EndNote 21 示例中恢复 <code>Sample_Library_21.enlx</code>，取包含 190 条有效记录和 2 条回收站记录的这一版。建一篇独立的 Word 文档，按冻结答案中的五个英文原句逐段写入。第一段在 Wiegrebe 的蝙蝠声呐论述后，用 EndNote 原生插入 Wiegrebe（2008）的真实引文并应用 Nature 样式。本次示例库中的原始记录号是 60，复现时应核实论文身份。<a href="../benchmarks/predeclared.md">原句、旧文献与三处新引文的评分标准</a> · <a href="https://doi.org/10.1007/s00422-008-0216-2">Wiegrebe 论文</a></li>
+<li>从出版商取得三篇 PDF，将 Sandve 命名为 <code>article-01.pdf</code>，复制同一字节为 <code>article-04.pdf</code>。Wilson 为 <code>article-02.pdf</code>，Gorresen 为 <code>article-03.pdf</code>。因此四个文件只对应三篇论文，其中 Gorresen 是干扰项。稿件内容为评测专门撰写，仓库仅分发原句、标识和校验材料。重建 DOCX 时 Word 可能重新分配内部标识，应另存新副本并重新核验现有引用。<a href="https://doi.org/10.1371/journal.pcbi.1003285">Sandve</a> · <a href="https://doi.org/10.1371/journal.pcbi.1005510">Wilson</a> · <a href="https://doi.org/10.1371/journal.pone.0205150">Gorresen</a> · <a href="../benchmarks/source-manifest.json">原始输入文件清单及 SHA-256</a></li>
+<li>每个会话只交付 PDF 文件夹、旧库和部分已引文的稿件。将协议中的同一条英文请求发给两组，答案与其他会话输出对两组均保密。预定正确位置是随机种子句引 Sandve 物理第 3 页、整洁数据表句引 Wilson 第 5 页、绘图数据保存句再引 Sandve 第 3 页。最后一句声称一项涉及 240 家实验室的试验将耗时减少 73%；本次给出的 PDF 无此依据，应保留文字、不给引文并说明缺证。页码从 PDF 第一页算起。<a href="../benchmarks/protocol.json">协议全文</a></li>
+<li>评测者用副本逐段核查正文、字段中的论文身份、库中新增行、旧记录与附件，并在桌面 Word 上执行前述删除和重插。每个会话的选文与实物交付分别评分，即使只有计划，也能单独记录选文表现。重复次数为每组两次，独立稿件数为一。未对四次结果做显著性检验。</li>
+</ol>
+<h2>探索性附加试验换用了另一个真实 EndNote 库</h2>
+<p>首轮交付后另行冻结了换库试验，保留同一原稿和四份 PDF。评测者在 EndNote 21 中新建独立库，使用官方导入功能写入 60 条记录。关库后的核验确认，原稿里的 Wiegrebe 记录号 60 在新库里指向 Gorresen。正确的 Wiegrebe 是第 1 号。第 2 号是把 <code>Computational</code> 写成 <code>Computation</code> 且缺 DOI 的 Sandve。库中另有 57 条无关记录，缺少 Wilson。两个独立会话获得的 8 个输入文件逐一字节相同。冻结的目标库数据库 SHA-256 为 <code>aba73fd86e77b64b8a7709fe93ce55d7e3c5eaa8600a3116bfcc3afc626a305f</code>。<a href="../benchmarks/extension-protocol.json">附加试验协议</a></p>
+<p>预定成功条件是把原引文改绑到 1 号，两个位置都复用 2 号，仅为 Wilson 新增一条，将库从 60 增至 61。这个构造同时考验跨库号码碰撞和近似题名，矛盾 DOI 另有代码回归测试。该试验在看过主试验的初步交付后设计，仍只涉及同一篇稿件。</p>
+<p>插件会话 F 找对了三处文献、页码和缺证句。宿主没有识别到一次局部辅助脚本的审查凭据，评测者另行审查了求解者指定的原生入口。建库过程中已实际观察到同一 EndNote 进程出现另一个库窗口。代码复核发现 v0.1.0 的导入依赖当时活动的库，清理阶段可能向该进程下其他有标题的库窗口发关闭消息。在共享桌面上停止执行，F 的八份输入哈希全部保留，交付数为零。这里记录的是操作风险和停止决定，没有观察到其他库遭到写入。普通工具组 E 的独立交付仍在核验。固定选择文件的 SHA-256 为 <code>585ee9abacf98c1279e88965c5f8224da8506a1445411ab407aaee61c20d6ed0</code>。终止的运行保留原始得分，后续版本需单独验收。</p>
+<h2>三个现成工具在相同稿件上能走到哪一步</h2>
+<p>我们运行了下表所列的原版入口。每个工具首先收到原稿副本，只有首段存在正式引用。随后按照工具擅长的输入形式，由操作者在三个正确位置提供标记或文献标识，最后一句一直不加标记。后者是阳性对照，用于判断入口能否完成其声明的转换。三个工具都没有在该对照中被要求独立审查没有标注的主张。Windows 环境使用 Python 3.13.9、python-docx 1.2.0 和 requests 2.32.5。</p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>工具及本次固定源码</th>
+<th>原稿直接交给入口</th>
+<th>给出它需要的输入后，磁盘上得到了什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/jgassens/PubMate/tree/f6f3492c0ad2ff8adbb2869043b22b8bd00688fd">PubMate 0.2.5</a></td>
+<td><code>pmid2endnote</code> 只发现已有 Word 标记中一处受保护的 DOI，跳过它并写出报告，正常退出。</td>
+<td>操作者在三处写入两个公开 DOI，并选用 <code>--doi-source crossref</code>。得到三处临时引文和一个包含两条 DOI 记录的 ENW 导入文件。旧引文字段仍在。</td>
+</tr>
+<tr>
+<td><a href="https://github.com/matsuikentaro1/endnote-insert/tree/34b2dc3c44efaa8bacb7a5c329845d5b9d2403c1">endnote-insert</a></td>
+<td>调用未改动的 <code>endnote_inserter.process_batch</code>，传入空标记映射。替换 0 处，DOCX 解包后各成员内容与输入相同。</td>
+<td>操作者加入 <code>[2]、[3]、[2]</code>，提供两个映射（Sandve 的 PMID 24204232、Wilson 的 PMID 28640806）及旧引文中的库标识。生成三处 <code>EN.CITE</code>，嵌入的题名和 DOI 正确；字段取 PMID 作为记录号，这两个号及这两篇新论文均不在冻结旧库。磁盘上的文末表仍是原稿的文末表。</td>
+</tr>
+<tr>
+<td><a href="https://github.com/lizhbei1995/endnote-word-cwyw-skill/tree/38f34fc27cd4b21305017578eed3b72263b53e82">endnote-word-cwyw-skill</a></td>
+<td><code>docx_to_endnote_temp.py</code> 在原稿里没有找到其所需的独立 <code>References</code> 标题，退出码 1，未生成 Word 或 RIS。</td>
+<td>操作者加同样的三个数字标记，并另附标题和两条含 DOI 的编号文献。使用 <code>--ris</code>，不预设新记录号。得到三处临时引文和两条 RIS 记录，正文中仍只有原先一个正式引文字段。</td>
+</tr>
+</tbody>
+</table></div>
+<p>原稿与阳性对照的差别由操作者引入，因此不能把“给定三个正确位置后的三个结果”解释为自动找到了三个位置。PubMate 的 ENW 和第三项的 RIS 中，均核实是两条不同、与期望匹配的 DOI；endnote-insert 的三个新字段只改动了 <code>word/document.xml</code>。第三项输出的同一 XML 中，<code>mc:Ignorable</code> 列出的 8 个命名空间前缀失去声明，本次没有在该输出上测 Word 的实际响应。这三项比较的终点均为独立程序写出的文件，后续人工导入、官方插件刷新和编辑表现都未纳入计分。各入口已有的功能可直接复用，手动流程能否完成整案需单独实测。</p>
+<p>本项目把这些步骤连到同一次交付。代理先用原文页证据选位置，再把论文与指定库中的真实记录对齐，在库副本只导入缺项，最后用官方 Word 插件格式化并验证 Word 和文献库。两次插件交付中，库的附件索引都将新引论文链接到对应的本地全文，两份附件与输入 PDF 的 SHA-256 一一相同。临时引文转换、标记映射和记录去重已有成熟实现。普通代理也能在此次桌面环境中自行写出完成引文和书目交付的流程。<a href="landscape.md">开源方案调研与采用关系</a></p>
+<h2>在两个公开书目数据集上漏掉多少重复，误合并多少？</h2>
+<p>在 CoLRev 的 LDD 基准固定版本中，事先约定按未分片 <code>records_pre_merged.csv</code> 文件大小选最小的两个数据集，入选的是 <code>stroke</code> 和 <code>haematology</code>。它们分别是卒中和血液学综述检索得到的书目记录，统计单位是两条书目记录组成的一对。保留全部 1,292 和 1,415 条，未按字段完备性过滤。每组 <code>n</code> 条记录有 <code>n × (n − 1) / 2</code> 个无序对，分别是 833,986 和 1,000,405 对。金标准文件 <code>merged_record_ids.csv</code> 中每个分号分隔的同篇记录组展开为所有两两组合，得到 479 和 165 个已标注重复对。这里以公开标注作为参照。<a href="https://github.com/CoLRev-Environment/ldd-full-benchmark/tree/f623ff8a4866defcaaa90021e3a8c916947dd91e">固定数据版本</a> · <a href="../benchmarks/compare_records.py">计分脚本</a></p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>数据集及金标准重复对</th>
+<th>方法</th>
+<th style="text-align: right;">自动判同篇</th>
+<th style="text-align: right;">判对 TP</th>
+<th style="text-align: right;">误合并 FP</th>
+<th style="text-align: right;">漏检 FN</th>
+<th style="text-align: right;">查准率</th>
+<th style="text-align: right;">召回率</th>
+<th style="text-align: right;">待复核中确属重复 / 待复核总对数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>卒中，479</td>
+<td>本插件逐对判定</td>
+<td style="text-align: right;">446</td>
+<td style="text-align: right;">446</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">33</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">93.11%</td>
+<td style="text-align: right;">19 / 57</td>
+</tr>
+<tr>
+<td>卒中，479</td>
+<td>BibDedupe 最终分组</td>
+<td style="text-align: right;">477</td>
+<td style="text-align: right;">477</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">99.58%</td>
+<td style="text-align: right;">2 / 104</td>
+</tr>
+<tr>
+<td>卒中，479</td>
+<td>BibDedupe 直接判同篇</td>
+<td style="text-align: right;">477</td>
+<td style="text-align: right;">477</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">99.58%</td>
+<td style="text-align: right;">2 / 104</td>
+</tr>
+<tr>
+<td>血液学，165</td>
+<td>本插件逐对判定</td>
+<td style="text-align: right;">95</td>
+<td style="text-align: right;">95</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">70</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">57.58%</td>
+<td style="text-align: right;">23 / 136</td>
+</tr>
+<tr>
+<td>血液学，165</td>
+<td>BibDedupe 最终分组</td>
+<td style="text-align: right;">137</td>
+<td style="text-align: right;">137</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">28</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">83.03%</td>
+<td style="text-align: right;">28 / 633</td>
+</tr>
+<tr>
+<td>血液学，165</td>
+<td>BibDedupe 直接判同篇</td>
+<td style="text-align: right;">135</td>
+<td style="text-align: right;">135</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">30</td>
+<td style="text-align: right;">100%</td>
+<td style="text-align: right;">81.82%</td>
+<td style="text-align: right;">30 / 635</td>
+</tr>
+</tbody>
+</table></div>
+<p>查准率 = TP / (TP + FP)，表示判为重复的记录对中有多少对正确。召回率 = TP / (TP + FN)，表示金标准重复对中有多少对被自动找回。以血液学的插件结果为例，自动接受 95 对，95 对都对，故查准率是 95/95；金标准有 165 对，召回率是 95/165。进入待复核队列的 136 对里有 23 对属于这 70 个漏检，另有 47 个真重复对连待复核队列也没进入。待复核结果没有计入自动判对。<a href="../benchmarks/record-results.json">机器可读计数和输入哈希</a></p>
+<p>插件直接调用 v0.1.0 的 <code>reference_identity.compare</code>，遍历所有记录对，题名、首作者、年份、期刊、卷页及 DOI/PMID 等规则沿用发布版本；结果为模糊或矛盾的两类单列待复核。BibDedupe 0.11.0 按其正常流程执行 <code>prep → block → match</code>，再用 <code>get_connected_components</code> 产生最终分组。直接判定只计两条记录之间明确标为重复的配对。分组口径还计入同一组里的其他配对，例如 A–B 和 B–C 同组后计入 A–C；血液学中因此多找回 2 对。每种口径的待复核数均剔除同一口径已自动接受的配对。评测没有调阈值、删除记录、写入 EndNote 或修改任何稿件。这是记录匹配组件的只读比较，未测 PDF 元数据抽取、导入拦截或最终 Word 去重的总体正确率。<a href="https://colrev-environment.github.io/bib-dedupe/usage.html">BibDedupe 用法与分组规则</a> · <a href="https://doi.org/10.21105/joss.06318">BibDedupe 方法论文</a></p>
+<h3>在 Windows 复算四个 CSV</h3>
+<p>从包含 <code>benchmarks/</code> 的本仓库检出目录运行，在仓库外新建自己的结果目录。下面只下载选中的四个数据文件。脚本会逐一检查与公开清单一致的 SHA-256，验证记录 ID 唯一、分组 ID 有效，使用一个 CPU 工作进程。示例中的 <code>$data</code> 路径可以更换。<a href="../benchmarks/record-results.json">数据指纹与原始计数</a></p>
+<pre><code class="language-powershell">$data = Join-Path (Split-Path -Parent (Get-Location).Path) 'ldd-comparison-data'
+$revision = 'f623ff8a4866defcaaa90021e3a8c916947dd91e'
+$raw = &quot;https://raw.githubusercontent.com/CoLRev-Environment/ldd-full-benchmark/$revision&quot;
+foreach ($study in 'stroke','haematology') {
+    $dir = New-Item -ItemType Directory -Path (Join-Path $data $study) -Force
+    foreach ($file in 'records_pre_merged.csv','merged_record_ids.csv') {
+        Invoke-WebRequest &quot;$raw/$study/$file&quot; -OutFile (Join-Path $dir.FullName $file)
+    }
+}
+</code></pre>
+<p>测试所用 pandas 为 2.3.3、BibDedupe 为 0.11.0，<code>tqdm</code> 由 BibDedupe 依赖安装。推荐在独立的 Windows Python 环境里运行，脚本会导入 Windows 版插件的书目匹配模块。输出文件应是一个新路径。</p>
+<pre><code class="language-powershell">python -m pip install &quot;bib-dedupe==0.11.0&quot; &quot;pandas==2.3.3&quot;
+python benchmarks/compare_records.py --data &quot;$data&quot; --output (Join-Path $data 'record-results.json')
+</code></pre></main></body></html>
