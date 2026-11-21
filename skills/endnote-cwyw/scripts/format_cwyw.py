@@ -16,10 +16,12 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import winreg
 from pathlib import Path
+from endnote_window import TargetWindow
 
 from audit_cwyw_docx import (
     BIBLIOGRAPHY_HEADINGS,
@@ -140,29 +142,7 @@ def list_process_pids(image_names: set[str]) -> list[tuple[int, str]]:
     return found
 
 
-def visible_window_titles(pids: set[int], win32gui: object, win32process: object) -> list[tuple[int, int, str]]:
-    if not pids:
-        return []
-    windows: list[int] = []
-    win32gui.EnumWindows(lambda hwnd, _: windows.append(hwnd), None)
-    results: list[tuple[int, int, str]] = []
-    for hwnd in windows:
-        if not win32gui.IsWindowVisible(hwnd):
-            continue
-        _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
-        if candidate_pid in pids:
-            title = win32gui.GetWindowText(hwnd) or ""
-            if title.strip():
-                results.append((int(hwnd), int(candidate_pid), title))
-    return results
-
-
-def ensure_endnote_library_open(
-    enl_path: Path,
-    win32gui: object,
-    win32process: object,
-    timeout: float = 35.0,
-) -> tuple[dict[str, object], subprocess.Popen[bytes] | None]:
+def ensure_endnote_library_open(enl_path: Path) -> tuple[dict[str, object], TargetWindow]:
     resolved_enl = enl_path.resolve()
     if not resolved_enl.is_file():
         raise FileNotFoundError(resolved_enl)
@@ -172,79 +152,28 @@ def ensure_endnote_library_open(
 
     endnote_exe = resolve_endnote_exe()
     proc = subprocess.Popen([str(endnote_exe), str(resolved_enl)])
-    deadline = time.monotonic() + timeout
-    titles: list[str] = []
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            raise RuntimeError(f"EndNote.exe exited prematurely with code {proc.returncode}")
-        win_info = visible_window_titles({proc.pid}, win32gui, win32process)
-        titles = [title for _, _, title in win_info]
-        good = [
-            title
-            for title in titles
-            if title.casefold() in {
-                resolved_enl.name.casefold(),
-                f"endnote 21 - {resolved_enl.name}".casefold(),
-            }
-        ]
-        if good:
-            time.sleep(2.0)
-            return (
-                {
-                    "launched_by_us": True,
-                    "pid": proc.pid,
-                    "pids": [proc.pid],
-                    "titles": titles,
-                    "enl": str(resolved_enl),
-                    "endnote_exe": str(endnote_exe),
-                },
-                proc,
-            )
-        time.sleep(0.25)
-    close_spawned_endnote({"launched_by_us": True, "pid": proc.pid}, proc, win32gui, win32process, timeout=10.0)
-    raise RuntimeError(
-        f"EndNote did not show target library window for {resolved_enl.name} within {timeout}s; seen titles={titles}"
-    )
+    target = TargetWindow.bind(proc, resolved_enl, timeout=35)
+    return {
+        "launched_by_us": True, "pid": proc.pid, "hwnd": target.hwnd,
+        "enl": str(resolved_enl), "endnote_exe": str(endnote_exe),
+    }, target
 
 
-def close_spawned_endnote(
-    info: dict[str, object] | None,
-    proc: subprocess.Popen[bytes] | None,
-    win32gui: object,
-    win32process: object,
-    timeout: float = 15.0,
-) -> dict[str, object] | None:
-    if not info or not info.get("launched_by_us") or proc is None or proc.pid != info.get("pid"):
-        return None
-    pid = int(info["pid"])
-    if proc.poll() is not None:
-        return {"pid": pid, "wm_close_posted": 0, "cleanly_exited": True}
-    WM_CLOSE = 0x0010
-    windows: list[int] = []
-    win32gui.EnumWindows(lambda hwnd, _: windows.append(hwnd), None)
-    posted = 0
-    for hwnd in windows:
-        if not win32gui.IsWindowVisible(hwnd):
-            continue
-        _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
-        if candidate_pid == pid and win32gui.GetWindowText(hwnd):
-            win32gui.PostMessage(hwnd, WM_CLOSE, 0, 0)
-            posted += 1
-    cleanly_exited = False
-    if proc is not None:
+class FormatIsolation:
+    """Once a foreign window is observed, this execution can no longer publish."""
+
+    def __init__(self, target: TargetWindow):
+        self.target = target
+        self.error = ""
+
+    def check(self) -> None:
+        if self.error:
+            raise RuntimeError(self.error)
         try:
-            proc.wait(timeout=timeout)
-            cleanly_exited = True
-        except subprocess.TimeoutExpired:
-            cleanly_exited = False
-    else:
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if not any(p == pid for p, _ in list_process_pids({"EndNote.exe"})):
-                cleanly_exited = True
-                break
-            time.sleep(0.25)
-    return {"pid": pid, "wm_close_posted": posted, "cleanly_exited": cleanly_exited}
+            self.target.require_exclusive()
+        except Exception as exc:
+            self.error = f"Lost exclusive ownership of the EndNote target: {exc}"
+            raise RuntimeError(self.error) from exc
 
 
 def direct_children(hwnd: int, win32gui: object, win32con: object) -> list[int]:
@@ -339,15 +268,31 @@ def collect_static_texts(hwnd: int, win32gui: object, win32con: object) -> list[
     return texts
 
 
+def owned_word_dialog(hwnd, document_hwnd, pid, win32gui, win32process, win32con) -> bool:
+    if not document_hwnd or not win32gui.IsWindowVisible(hwnd) or win32gui.GetClassName(hwnd) != "#32770":
+        return False
+    seen = set()
+    current = hwnd
+    while current and current not in seen:
+        if win32process.GetWindowThreadProcessId(current)[1] != pid:
+            return False
+        if current == document_hwnd:
+            return True
+        seen.add(current)
+        current = win32gui.GetWindow(current, win32con.GW_OWNER)
+    return False
+
+
 def inspect_modal_dialogs(
-    pids: set[int],
+    document_hwnd: int,
+    pid: int,
     win32gui: object,
     win32process: object,
     win32con: object,
     *,
     exclude_hwnd: int | None = None,
 ) -> list[dict[str, object]]:
-    if not pids:
+    if not document_hwnd:
         return []
     windows: list[int] = []
     win32gui.EnumWindows(lambda hwnd, _: windows.append(hwnd), None)
@@ -355,17 +300,12 @@ def inspect_modal_dialogs(
     for hwnd in windows:
         if exclude_hwnd is not None and hwnd == exclude_hwnd:
             continue
-        if not win32gui.IsWindowVisible(hwnd):
-            continue
-        _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
-        if candidate_pid not in pids:
-            continue
-        if win32gui.GetClassName(hwnd) != "#32770":
+        if not owned_word_dialog(hwnd, document_hwnd, pid, win32gui, win32process, win32con):
             continue
         found.append(
             {
                 "hwnd": int(hwnd),
-                "pid": int(candidate_pid),
+                "pid": pid,
                 "title": (win32gui.GetWindowText(hwnd) or "").strip(),
                 "static_texts": collect_static_texts(hwnd, win32gui, win32con),
             }
@@ -375,28 +315,34 @@ def inspect_modal_dialogs(
 
 def find_style_dialog(
     process_id: int,
+    document_hwnd: int,
     timeout: float,
     win32gui: object,
     win32process: object,
     win32con: object,
+    isolation: FormatIsolation,
 ) -> tuple[int, int, int, int] | None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        isolation.check()
         windows: list[int] = []
         win32gui.EnumWindows(lambda hwnd, _: windows.append(hwnd), None)
         for hwnd in windows:
-            _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
-            if candidate_pid != process_id or not win32gui.IsWindowVisible(hwnd):
-                continue
-            if win32gui.GetClassName(hwnd) != "#32770":
+            if not owned_word_dialog(hwnd, document_hwnd, process_id, win32gui, win32process, win32con):
                 continue
             combo = find_control(hwnd, 5049, win32gui, win32con)
             ok_button = find_control(hwnd, 1, win32gui, win32con)
+            title = (win32gui.GetWindowText(hwnd) or "").casefold()
+            recognized = any(name in title for name in ("configure bibliography", "format bibliography", "配置参考文献", "设置参考文献"))
+            if combo is None and not recognized:
+                continue
             if combo is None:
                 combo = find_control_by_class(hwnd, "ComboBox", win32gui, win32con)
             if ok_button is None:
                 ok_button = find_ok_button_fallback(hwnd, win32gui, win32con)
-            if combo is not None and ok_button is not None:
+            if (combo is not None and ok_button is not None
+                    and win32gui.GetClassName(combo).casefold() == "combobox"
+                    and win32gui.GetClassName(ok_button).casefold() == "button"):
                 ctrl_id = int(win32gui.GetDlgCtrlID(combo))
                 return hwnd, combo, ok_button, ctrl_id
         time.sleep(0.1)
@@ -531,10 +477,15 @@ def save_if_complete(
     expected: dict[str, object],
     timeout: float,
     pythoncom: object,
+    isolation: FormatIsolation,
 ) -> dict[str, object]:
     report = wait_for_complete(document, expected, timeout, pythoncom)
     com_call_with_retry(document.Repaginate, pythoncom)
-    com_call_with_retry(lambda: document.SaveAs2(str(output), FileFormat=16), pythoncom)
+    def save():
+        isolation.check()
+        document.SaveAs2(str(output), FileFormat=16)
+        isolation.check()
+    com_call_with_retry(save, pythoncom)
     if not output.is_file():
         raise RuntimeError("Word SaveAs2 returned without creating the output")
     return report
@@ -546,6 +497,7 @@ def recover_running_document(
     expected: dict[str, object],
     timeout: float,
     word_pid: int,
+    isolation: FormatIsolation,
 ) -> dict[str, object]:
     import pythoncom
     import win32com.client
@@ -567,7 +519,7 @@ def recover_running_document(
         if not owned:
             raise RuntimeError("Recovery document does not belong to this attempt's Word process")
         application = document.Application
-        report = save_if_complete(document, output, expected, timeout, pythoncom)
+        report = save_if_complete(document, output, expected, timeout, pythoncom, isolation)
         return {"status": "PASS", "report": report}
     finally:
         if owned and document is not None:
@@ -617,6 +569,8 @@ def main() -> int:
         raise RuntimeError("Input and output must be different paths")
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite output: {output}")
+    if report_path == output:
+        raise ValueError("The DOCX output and JSON report require separate paths")
     if report_path and report_path.exists():
         raise FileExistsError(f"Refusing to overwrite report: {report_path}")
     source_hash = sha256_file(source)
@@ -667,6 +621,8 @@ def main() -> int:
     if preflight["status"] != "PASS":
         print(json.dumps(preflight, ensure_ascii=False, indent=2))
         return 1
+    if args.enl is None:
+        raise ValueError("Supply --enl with the candidate library path for native Word formatting.")
 
     try:
         import pythoncom
@@ -678,22 +634,29 @@ def main() -> int:
         raise RuntimeError("pywin32 is required in the active Windows environment") from exc
 
     shared: dict[str, object] = {}
-    endnote_info: dict[str, object] | None = None
-    endnote_proc = None
     endnote_close_info: dict[str, object] | None = None
     style_selection: dict[str, object] | None = None
     handled_style_hwnd: int | None = None
     unexpected_seen_at: dict[int, float] = {}
     existing_word_pids = {pid for pid, _ in list_process_pids({"WINWORD.EXE"})}
+    # Word produces a private candidate first. Only a successfully audited,
+    # closed session can create the requested output path.
+    candidate_dir = Path(tempfile.mkdtemp(prefix=".cwyw-word-", dir=output.parent))
+    candidate_output = candidate_dir / output.name
+    try:
+        endnote_info, target = ensure_endnote_library_open(args.enl.resolve())
+    except Exception:
+        candidate_dir.rmdir()
+        raise
+    isolation = FormatIsolation(target)
 
     def record_unexpected_dialogs() -> None:
-        pids: set[int] = set()
-        if shared.get("word_pid"):
-            pids.add(int(shared["word_pid"]))
-        if endnote_info and endnote_info.get("pids"):
-            pids.update(int(p) for p in endnote_info["pids"])
+        try:
+            isolation.check()
+        except RuntimeError:
+            return
         dialogs = inspect_modal_dialogs(
-            pids,
+            int(shared.get("document_hwnd", 0)), int(shared.get("word_pid", 0)),
             win32gui,
             win32process,
             win32con,
@@ -752,17 +715,28 @@ def main() -> int:
                 )
             scratch.Close(False)
             scratch = None
+            isolation.check()
             document = application.Documents.Open(
                 str(source), ReadOnly=False, AddToRecentFiles=False, Visible=True
             )
             if win32process.GetWindowThreadProcessId(document.ActiveWindow.Hwnd)[1] != pid:
                 raise RuntimeError("Candidate document opened in an unverified Word window")
+            shared["document_hwnd"] = int(document.ActiveWindow.Hwnd)
             shared["opened"] = True
             shared["format_started"] = True
             document.Activate()
-            com_call_with_retry(
-                lambda: application.Run("ENFormatBibliography"), pythoncom
-            )
+
+            def run_native_macro(name):
+                active = application.ActiveDocument
+                if (Path(active.FullName).resolve() != source
+                        or int(active.ActiveWindow.Hwnd) != shared["document_hwnd"]):
+                    raise RuntimeError("Target Word document is no longer active")
+                isolation.check()
+                result = application.Run(name)
+                isolation.check()
+                return result
+
+            com_call_with_retry(lambda: run_native_macro("ENFormatBibliography"), pythoncom)
             shared["initial_format_returned"] = True
             active = application.ActiveDocument
             if Path(active.FullName).resolve() != source:
@@ -776,20 +750,20 @@ def main() -> int:
                 else:
                     shared["dialog_stage"] = True
                     com_call_with_retry(
-                        lambda: application.Run("ENFormatBibliographyDlg"), pythoncom
+                        lambda: run_native_macro("ENFormatBibliographyDlg"), pythoncom
                     )
                     shared["style_dialog_returned"] = True
                     com_call_with_retry(
-                        lambda: application.Run("ENFormatBibliography"), pythoncom
+                        lambda: run_native_macro("ENFormatBibliography"), pythoncom
                     )
                     shared["post_style_format_returned"] = True
             shared["com_report"] = save_if_complete(
-                document, output, expected, args.timeout, pythoncom
+                document, candidate_output, expected, args.timeout, pythoncom, isolation
             )
             shared["saved"] = True
         except Exception as exc:
             shared["error"] = f"{type(exc).__name__}: {exc}"
-            shared["needs_recovery"] = bool(shared.get("format_started"))
+            shared["needs_recovery"] = bool(shared.get("format_started") and not isolation.error)
         finally:
             if scratch is not None:
                 try:
@@ -813,17 +787,16 @@ def main() -> int:
             pythoncom.CoUninitialize()
 
     thread = threading.Thread(target=worker, daemon=True)
+    recovery: dict[str, object] | None = None
     try:
-        if args.enl is not None:
-            endnote_info, endnote_proc = ensure_endnote_library_open(
-                args.enl.resolve(), win32gui, win32process
-            )
+        isolation.check()
         thread.start()
         if args.style:
             deadline = time.monotonic() + args.timeout
             while time.monotonic() < deadline and not shared.get("dialog_stage"):
                 if (
                     shared.get("error")
+                    or isolation.error
                     or shared.get("style_already_active")
                     or shared.get("saved")
                     or not thread.is_alive()
@@ -833,31 +806,44 @@ def main() -> int:
                 time.sleep(0.1)
             if shared.get("style_already_active"):
                 style_selection = {"already_active": True, "requested": args.style}
-            elif shared.get("dialog_stage"):
+            elif shared.get("dialog_stage") and not isolation.error:
                 found = find_style_dialog(
                     int(shared["word_pid"]),
+                    int(shared["document_hwnd"]),
                     min(args.timeout, 60.0),
                     win32gui,
                     win32process,
-                    win32con,
+                    win32con, isolation,
                 )
                 if found is None:
                     shared["style_selection_error"] = "Configure Bibliography dialog not found"
                 else:
                     dialog, combo, ok_button, combo_ctrl_id = found
                     handled_style_hwnd = dialog
+
+                    def check_style_owner():
+                        isolation.check()
+                        if not (owned_word_dialog(dialog, int(shared["document_hwnd"]), int(shared["word_pid"]),
+                                                  win32gui, win32process, win32con)
+                                and win32gui.IsChild(dialog, combo) and win32gui.IsChild(dialog, ok_button)):
+                            raise RuntimeError("CWYW style dialog or its controls changed ownership")
+
+                    check_style_owner()
                     before_combo = combo_items(combo, win32gui)
                     items = list(before_combo["items"])
                     if args.style not in items:
+                        check_style_owner()
                         win32gui.PostMessage(dialog, win32con.WM_CLOSE, 0, 0)
                         shared["style_selection_error"] = (
                             f"Requested style {args.style!r} is not in the CWYW selector"
                         )
                     else:
                         index = items.index(args.style)
+                        check_style_owner()
                         selected = select_combo(combo, index)
                         parent = win32gui.GetParent(combo)
                         for notification in (CBN_SELCHANGE, CBN_SELENDOK):
+                            check_style_owner()
                             win32gui.SendMessage(
                                 parent,
                                 win32con.WM_COMMAND,
@@ -865,6 +851,7 @@ def main() -> int:
                                 combo,
                             )
                         after_combo = combo_items(combo, win32gui)
+                        check_style_owner()
                         win32gui.SendMessage(ok_button, win32con.BM_CLICK, 0, 0)
                         style_selection = {
                             "before": before_combo,
@@ -879,29 +866,33 @@ def main() -> int:
         while thread.is_alive() and time.monotonic() < join_deadline:
             record_unexpected_dialogs()
             thread.join(timeout=0.25)
+        if not candidate_output.exists() and shared.get("needs_recovery") and not thread.is_alive():
+            isolation.check()
+            try:
+                recovery = recover_running_document(
+                    source, candidate_output, expected, min(args.timeout, 90.0), int(shared["word_pid"]), isolation
+                )
+                shared["recovered"] = True
+            except Exception as exc:
+                recovery = {"status": "FAIL", "error": f"{type(exc).__name__}: {exc}"}
+        isolation.check()
+    except Exception as exc:
+        shared["session_error"] = f"{type(exc).__name__}: {exc}"
     finally:
-        endnote_close_info = close_spawned_endnote(
-            endnote_info, endnote_proc, win32gui, win32process
-        )
-
-    recovery: dict[str, object] | None = None
-    # Recover only after the original COM worker has returned. Attaching while
-    # it is still blocked in a modal dialog can corrupt the same live document.
-    if (
-        not output.exists()
-        and shared.get("needs_recovery")
-        and not thread.is_alive()
-    ):
-        try:
-            recovery = recover_running_document(source, output, expected, min(args.timeout, 90.0), int(shared["word_pid"]))
-            shared["recovered"] = True
-        except Exception as exc:
-            recovery = {"status": "FAIL", "error": f"{type(exc).__name__}: {exc}"}
+        endnote_close_info = {"pid": endnote_info["pid"], "cleanly_exited": False}
+        if not thread.is_alive() and not isolation.error:
+            try:
+                isolation.check()
+                endnote_close_info["cleanly_exited"] = target.close(timeout=15)
+            except Exception as exc:
+                endnote_close_info["error"] = f"{type(exc).__name__}: {exc}"
+        if isolation.error:
+            shared["isolation_error"] = isolation.error
 
     after: dict[str, object] | None = None
-    if output.exists():
+    if candidate_output.exists() and not thread.is_alive():
         after = audit(
-            output,
+            candidate_output,
             expect_main=int(expected["main"]),
             expect_references=(
                 int(expected["references"])
@@ -914,13 +905,21 @@ def main() -> int:
         )
 
     success = bool(
-        output.exists()
+        candidate_output.exists()
         and after is not None
         and after["status"] == "PASS"
         and not thread.is_alive()
         and not shared.get("style_selection_error")
-        and (not args.enl or (endnote_close_info and endnote_close_info["cleanly_exited"]))
+        and not shared.get("session_error")
+        and not shared.get("isolation_error")
+        and (shared.get("saved") or shared.get("recovered"))
+        and endnote_close_info["cleanly_exited"]
     )
+    if success:
+        # On Windows rename fails atomically if another caller has created the destination.
+        candidate_output.rename(output)
+    if not thread.is_alive() and not any(candidate_dir.iterdir()):
+        candidate_dir.rmdir()
     result = {
         "status": "PASS" if success else "FAIL",
         "preflight": preflight,
@@ -936,7 +935,8 @@ def main() -> int:
     rendered = json.dumps(result, ensure_ascii=False, indent=2)
     if report_path:
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(rendered + "\n", encoding="utf-8")
+        with report_path.open("x", encoding="utf-8") as report:
+            report.write(rendered + "\n")
     print(rendered)
     return 0 if success else 1
 

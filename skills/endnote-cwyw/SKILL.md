@@ -14,6 +14,7 @@ Create real, refreshable EndNote fields through the official Word add-in. Treat 
 - Use EndNote-recognized temporary citations such as `{Example, 2024 #1}` or `{Example, 2024 #1; Sample, 2025 #2}`, then invoke EndNote's official `ENFormatBibliography` macro. These example numbers are illustrative.
 - Read a frozen copy of `<library>.Data\sdb\sdb.eni` for record and group evidence. The `.enl` file is not the readable record database.
 - Never terminate existing Word or EndNote processes without explicit user approval. In particular, treat invisible `/Automation -Embedding` Word processes as potentially holding unsaved state.
+- Supply the explicit candidate `--enl` for native formatting. If another library window or an unexpected dialog appears during the operation, stop and inspect the private run result before retrying on a fresh copy.
 - Do not claim visual or pagination QA unless the final DOCX was actually rendered or opened and inspected.
 
 Before live Word/EndNote automation or failure recovery, read [references/windows-cwyw-workflow.md](references/windows-cwyw-workflow.md).

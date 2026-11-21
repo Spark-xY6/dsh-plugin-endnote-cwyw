@@ -6,7 +6,7 @@
 
 A DeepSeek Harness plugin for a familiar handoff: your collaborator sends a partly cited Word draft, you have an older EndNote library and a folder of PDFs, and both of you want to keep using **Edit & Manage Citation(s)** in Word. The plugin delivers an updated library copy and a DOCX containing live EndNote citations. One work can appear at several places in the text while retaining a single bibliography entry.
 
-**Desktop limitation in v0.1.0.** Use a dedicated Windows session with only the test library for native import and formatting. EndNote can open multiple library windows in one process. We found that this version can direct an import or a close action to an unintended library window. The shared-desktop trial stopped before either action. [Measured scope and limitations](docs/comparison.md)
+**v0.1.1 passed a native cross-library edit test.** Record 60 in the incoming draft referred to another work in the target library. The packaged workflow rebound the citation to record 1, reused a misspelled DOI-free record twice and added one missing work. After removal and reinsertion in Word, the three saved documents contained 3, 2 and 3 bibliography entries. The study retains the stopped shared-desktop run of v0.1.0. [Comparison and test scope](docs/comparison.md)
 
 ## Why build this?
 
@@ -19,11 +19,11 @@ PubMate's read-only preview and per-identifier reports informed our import previ
 Use an interactive Windows desktop with Word, EndNote and its working Cite While You Write (CWYW) add-in. The tested host is DSH `0.2.2-rc.5` with Node 24.13.0 and EndNote 21. Run DSH on the same desktop, with its agent allowed to read the three inputs and execute local PowerShell. [DSH plugin installation](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish)
 
 ```powershell
-git clone --branch v0.1.0 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
+git clone --branch v0.1.1 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
 cd dsh-plugin-endnote-cwyw
 # Use a Python 3.10+ environment of your choice for the agent and this command.
 python -m pip install -r requirements.txt
-dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.0
+dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.1
 ```
 
 Restart the profile after installation. The bundle registers **cite-from-pdfs** and **endnote-cwyw**. The repository also works with filesystem-skill hosts that can run local commands: copy both directories under `skills/` together. For a specific installation or contributor test, use the Git commit shown on the release. [Releases](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/releases)

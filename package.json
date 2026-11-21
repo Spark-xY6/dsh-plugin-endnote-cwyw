@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-endnote-cwyw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Extend a partially cited Word manuscript from PDFs and an existing EndNote library, with editable citations and an audited library copy.",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git" },

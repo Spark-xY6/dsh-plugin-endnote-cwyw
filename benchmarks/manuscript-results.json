@@ -5,6 +5,27 @@
   "native_host": "Windows, Word 16 and EndNote 21",
   "distinct_manuscripts": 1,
   "initial_library_repetitions_per_condition": 2,
+  "v0_1_1_native_window_interference": {
+    "windows_in_one_endnote_process": 2,
+    "different_library_database_handles_confirmed": true,
+    "production_import_refused": true, "delivery_published": false,
+    "other_window_still_open_after_refusal": true,
+    "target_active_records_before_after": [190,190],
+    "other_active_records_before_after": [60,60],
+    "references_group_membership_attachment_links_and_files_unchanged": true,
+    "frozen_sources_unchanged": true
+  },
+  "pubmate_marked_positive_control": {
+    "version": "0.2.5", "predetermined_marker_sites": 3, "distinct_operator_supplied_dois": 2,
+    "original_outputs": ["DOCX with temporary citations","ENW"],
+    "desktop_followup": "Scoped operator driver using official EndNote import and Word update",
+    "active_records": [190,192], "record_ids_by_site": [60,2470,2471,2470],
+    "prose_paragraphs_verified": 5, "rendered_bibliography_entries_verified": 3,
+    "saved_docx_sha256": "7f018c3c5f58704599a9497af5b4501960c8e3fab3508226237a208b18b00a81",
+    "generic_driver_exit": 1, "generic_driver_mismatches": ["expected_field_record_ids","expected_settings_record_ids"],
+    "independent_check_using_actual_imported_record_ids": "pass",
+    "reopen_delete_reinsert": "not measured in this control"
+  },
   "gold_and_protocol_frozen_before_first_solver": true,
   "exploratory_library_substitution": {
     "same_manuscript_and_four_pdfs": true,
@@ -21,6 +42,15 @@
     "correct_target_record_for_wiegrebe": 1,
     "target_sandve_variant_without_doi": 2,
     "wilson_in_target_before": false,
+    "bare_E": {
+      "docx_sha256": "dc9014892324ffd7e78b1fc4881f51badf43f5a2dcebdc6009278f3b042f8803",
+      "active_after": 61, "retained_original_record_ids": 60,
+      "original_rows_unchanged_in_all_fields": 59,
+      "existing_row_with_source_verified_title_and_doi_correction": 2,
+      "record_ids_by_claim": [[1], [2], [61], [2], []],
+      "bibliography_entries": 3, "solver_native_removal_and_reinsertion": "passed on a copy",
+      "independent_native_round_trip": {"result": "pass", "citation_fields": [4,3,4], "bibliography_entries": [3,2,3], "reopened_restored_ids": [1,2,61,2], "saved_files_audited": 3}
+    },
     "v0_1_0_skills_F": {
       "source_supported_placements": 3, "correct_abstentions": 1,
       "frozen_placement_plan_sha256": "585ee9abacf98c1279e88965c5f8224da8506a1445411ab407aaee61c20d6ed0",
@@ -30,6 +60,20 @@
       "native_actions_dispatched": 0,
       "reason": "Shared-desktop library-window isolation failed code safety review",
       "postdelivery_edit": "not assessable"
+    },
+    "v0_1_1_replay_of_frozen_F_decisions": {
+      "type": "deterministic software replay on fresh input copies",
+      "new_autonomous_solver_sessions": 0,
+      "docx_sha256": "fef3b2f09a36c826702fadcf691172336756b61272035ef31a7e0864d35d13f1",
+      "source_files_unchanged_out_of_8": 8,
+      "original_record_rows_identical_out_of_60": 60,
+      "paragraphs_identical_out_of_5": 5,
+      "correct_binding_or_abstention_out_of_5": 5,
+      "active_after": 61, "trash_after": 0, "new_record_ids": [61],
+      "new_article_with_verified_pdf_link": 1,
+      "record_ids_by_claim": [[1],[2],[61],[2],[]],
+      "visible_numbers": [1,2,3,2], "temporary_citations": 0,
+      "native_round_trip": {"result": "pass", "citation_fields": [4,3,4], "bibliography_entries": [3,2,3], "saved_files_audited": 3}
     }
   },
   "initial_library": {
@@ -51,7 +95,8 @@
       "bibliography_entries": 3,
       "bibliography_fields": 1,
       "temporary_citations": 0,
-      "all_four_main_citations_bound_to_target": true
+      "all_four_main_citations_bound_to_target": true,
+      "independent_native_round_trip": {"arms_passed": ["A","B","C","D"], "citation_fields_each": [4,3,4], "bibliography_entries_each": [3,2,3], "reopened_restored_ids_each": [60,2470,2471,2470], "saved_files_audited_each": 3, "immediate_postmacro_sampling_required_wait_in_arms": ["C","D"]}
     },
     "runs": [
       {"arm":"A","condition":"bare","repetition":1,"primary":"pass","docx_sha256":"4e922b7d99719d553694fe0216c09221c1947fb8385c815cbe736a2ff94ca24e","new_articles_with_byte_verified_pdf_link":0,"retained_helper_sources":6,"retained_helper_source_bytes":8795,"whole_session_seconds":396},

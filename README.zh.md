@@ -2,7 +2,7 @@
 
 [English](README.md) · [裸跑与开源工具对照](docs/comparison.md) · [桌面评测](docs/evaluation.md) · [同类项目与借鉴](docs/landscape.md)
 
-**v0.1.0 桌面使用限制。** 原生导入与排版需要独占的 Windows 会话，且只打开测试用的库。EndNote 能在同一进程中打开多个库窗口，本版可能将导入或关闭操作发给另一个库窗口。共享桌面对照已在发出这些操作前停止。[对照结果与适用范围](docs/comparison.md)
+**v0.1.1 已通过真实换库和编辑验收。** 稿件里的旧记录 60 在目标库里属于另一篇论文。修复版将这处引文重新绑定到正确的 1 号记录，复用缺少 DOI、题名有误的 2 号记录，只新增一篇。重开 Word 删除并插回后，文末篇数为 3 → 2 → 3。原 v0.1.0 在共享桌面停机的记录保留在评测中。[换库试验与各组结果](docs/comparison.md)
 
 [![主分支持续集成](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [v0.1.0 发布标签的测试](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
 
@@ -19,10 +19,10 @@
 准备一台能交互运行桌面 Word、EndNote 及其 CWYW 插件的 Windows 电脑。DSH 和 Python 均在这台电脑运行。验收环境为 DeepSeek Harness `0.2.2-rc.5`、Node 24.13.0 和 EndNote 21。以下命令在 PowerShell 中运行，Python 使用你要交给 DSH 调用的 3.10 或更新环境。
 
 ```powershell
-git clone --branch v0.1.0 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
+git clone --branch v0.1.1 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
 cd dsh-plugin-endnote-cwyw
 python -m pip install -r requirements.txt
-dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.0
+dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.1
 ```
 
 重新启动该 DSH profile。包内注册了 `cite-from-pdfs` 和 `endnote-cwyw`。也可以把仓库 `skills/` 下的两个目录相邻放入其他支持本地命令的技能宿主。[DSH 官方安装说明](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish)

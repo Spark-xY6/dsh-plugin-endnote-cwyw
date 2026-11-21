@@ -21,7 +21,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -37,11 +36,15 @@ from _common import (
 from reference_identity import Identity, IdentityReview, RecordIndex, compare
 
 
-WM_CLOSE = 0x0010
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "endnote-cwyw/scripts"))
+from endnote_window import TargetWindow, WindowInterference
+
+
 BM_CLICK = 0x00F5
-CB_GETCOUNT = 0x0146
+CB_GETCURSEL = 0x0147
 CB_GETLBTEXT = 0x0148
 CB_GETLBTEXTLEN = 0x0149
+CB_FINDSTRINGEXACT = 0x0158
 CB_SETCURSEL = 0x014E
 CBN_SELCHANGE = 1
 CBN_SELENDOK = 9
@@ -215,210 +218,172 @@ def format_ris_entry(item: dict[str, object]) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
-def _win32():
-    import win32con
+def _send(hwnd, msg, wparam=0, lparam=0):
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    fn = user.SendMessageTimeoutW
+    fn.argtypes = (wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                   wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t))
+    fn.restype = wintypes.LPARAM
+    result = ctypes.c_size_t()
+    if not fn(hwnd, msg, wparam, lparam, 2, 3000, ctypes.byref(result)):
+        raise WindowInterference("EndNote did not respond to a targeted control message")
+    return ctypes.c_ssize_t(result.value).value
+
+
+def _read_text(hwnd):
+    n = _send(hwnd, 0x000E)  # WM_GETTEXTLENGTH
+    if not 0 <= n <= 32767:
+        raise WindowInterference("Unexpected native text control")
+    buf = ctypes.create_unicode_buffer(n + 1)
+    _send(hwnd, 0x000D, n + 1, ctypes.addressof(buf))
+    return buf.value
+
+
+def _children(parent):
     import win32gui
-    import win32process
-
-    return win32gui, win32process, win32con
-
-
-def _visible_windows_for_pids(pids: set[int]) -> list[dict[str, object]]:
-    win32gui, win32process, win32con = _win32()
-    windows: list[int] = []
-    win32gui.EnumWindows(lambda hwnd, _: windows.append(hwnd), None)
-    found: list[dict[str, object]] = []
-    for hwnd in windows:
-        if not win32gui.IsWindowVisible(hwnd):
-            continue
-        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        if pid not in pids:
-            continue
-        found.append(
-            {
-                "hwnd": int(hwnd),
-                "pid": int(pid),
-                "class": win32gui.GetClassName(hwnd) or "",
-                "title": (win32gui.GetWindowText(hwnd) or "").strip(),
-            }
-        )
-    return found
-
-
-def _inspect_dialog_tree(hwnd: int) -> list[dict[str, object]]:
-    win32gui, _, win32con = _win32()
-    controls: list[dict[str, object]] = []
-
-    def walk(parent: int) -> None:
-        child = win32gui.GetWindow(parent, win32con.GW_CHILD)
-        while child:
-            controls.append(
-                {
-                    "hwnd": int(child),
-                    "ctrl_id": int(win32gui.GetDlgCtrlID(child)),
-                    "class": win32gui.GetClassName(child) or "",
-                    "text": (win32gui.GetWindowText(child) or "").strip(),
-                }
-            )
-            walk(child)
-            child = win32gui.GetWindow(child, win32con.GW_HWNDNEXT)
-
-    walk(hwnd)
+    controls = []
+    win32gui.EnumChildWindows(parent, lambda hwnd, _: controls.append(hwnd), None)
     return controls
 
 
-def _try_select_endnote_import_filter(hwnd: int) -> dict[str, object] | None:
-    """If an EndNote Import Filter modal appears, select 'EndNote Import' and click OK."""
-    win32gui, _, _ = _win32()
-    controls = _inspect_dialog_tree(hwnd)
-    combo = next((c for c in controls if c["class"].casefold() == "combobox"), None)
-    ok_btn = next(
-        (
-            c
-            for c in controls
-            if c["class"].casefold() == "button"
-            and (c["ctrl_id"] == 1 or c["text"] in {"OK", "确定", "&OK", "Import", "&Import"})
-        ),
-        None,
-    )
-    if combo is None or ok_btn is None:
-        return None
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-    user32.SendMessageW.restype = ctypes.c_ssize_t
-    combo_hwnd = int(combo["hwnd"])
-    count = int(user32.SendMessageW(combo_hwnd, CB_GETCOUNT, 0, 0))
-    items: list[str] = []
-    for idx in range(max(count, 0)):
-        length = int(user32.SendMessageW(combo_hwnd, CB_GETLBTEXTLEN, idx, 0))
-        buf = ctypes.create_unicode_buffer(max(length + 1, 1))
-        user32.SendMessageW(combo_hwnd, CB_GETLBTEXT, idx, ctypes.addressof(buf))
-        items.append(buf.value)
-    match_idx = next((i for i, val in enumerate(items) if val.casefold() == "endnote import"), None)
-    if match_idx is None:
-        return None
-    user32.SendMessageW(combo_hwnd, CB_SETCURSEL, match_idx, 0)
-    parent = win32gui.GetParent(combo_hwnd)
-    ctrl_id = int(combo["ctrl_id"])
-    for note in (CBN_SELCHANGE, CBN_SELENDOK):
-        win32gui.SendMessage(parent, WM_COMMAND, ctrl_id | (note << 16), combo_hwnd)
-    win32gui.SendMessage(int(ok_btn["hwnd"]), BM_CLICK, 0, 0)
-    return {"handled": True, "selected_filter": items[match_idx]}
+def _control(dialog, cid, cls):
+    import win32gui
+    found = [h for h in _children(dialog) if win32gui.GetDlgCtrlID(h) == cid
+             and win32gui.GetClassName(h).casefold() == cls.casefold() and win32gui.IsWindowVisible(h)]
+    if len(found) != 1:
+        raise WindowInterference(f"Cannot identify expected {cls} control {cid} in the target-owned dialog")
+    return found[0]
+
+
+def _filename_edit(picker):
+    import win32gui
+    controls = _children(picker)
+    edits = [h for h in controls if win32gui.GetClassName(h) == "Edit" and win32gui.IsWindowVisible(h)]
+    holders = [h for h in controls if win32gui.GetDlgCtrlID(h) == 1148]
+    matches = [h for h in edits if win32gui.GetDlgCtrlID(h) in (1148, 1152)
+               or any(win32gui.IsChild(owner, h) for owner in holders)]
+    if len(matches) != 1:
+        raise WindowInterference("Cannot identify the native file-name edit box")
+    return matches[0]
+
+
+def _select_import_option(target, dialog):
+    combo = _control(dialog, 1124, "ComboBox")
+    name = ctypes.create_unicode_buffer("EndNote Import")
+    index = _send(combo, CB_FINDSTRINGEXACT, -1, ctypes.addressof(name))
+    if index < 0:
+        raise WindowInterference("EndNote Import filter is unavailable in the target dialog")
+    target.require_exclusive((dialog,))
+    if _send(combo, CB_SETCURSEL, index) != index:
+        raise WindowInterference("Could not select EndNote Import")
+    for notice in (CBN_SELCHANGE, CBN_SELENDOK):
+        target.require_exclusive((dialog,))
+        _send(dialog, WM_COMMAND, 1124 | (notice << 16), combo)
+    if _send(combo, CB_GETCURSEL) != index:
+        raise WindowInterference("The EndNote Import selection changed")
+    length = _send(combo, CB_GETLBTEXTLEN, index)
+    if not 0 < length < 256:
+        raise WindowInterference("Cannot read the selected import filter")
+    label = ctypes.create_unicode_buffer(length + 1)
+    _send(combo, CB_GETLBTEXT, index, ctypes.addressof(label))
+    if label.value.casefold() != "endnote import":
+        raise WindowInterference("The selected filter is not EndNote Import")
+
+
+def _menu_has_import(target):
+    import win32api
+    import win32gui
+    def contains(menu):
+        for i in range(win32gui.GetMenuItemCount(menu)):
+            sub = win32gui.GetSubMenu(menu, i)
+            if sub and contains(sub):
+                return True
+            if not sub and win32gui.GetMenuItemID(menu, i) == 32777:
+                return not (win32gui.GetMenuState(menu, i, 0x400) & 3)
+        return False
+    menu = win32gui.GetMenu(target.hwnd)
+    if menu:
+        return contains(menu)
+    # EndNote's custom MFC menu bar can draw the same commands without a system HMENU.
+    dll = win32api.LoadLibraryEx(str(target.proc.args[0]), 0, 2)  # datafile only
+    try:
+        resource_menu = win32gui.LoadMenu(dll, 1)
+        try:
+            return contains(resource_menu)
+        finally:
+            win32gui.DestroyMenu(resource_menu)
+    finally:
+        win32api.FreeLibrary(dll)
+
+
+def _targeted_import(target, enw, timeout):
+    import win32gui
+    target.require_exclusive()
+    if not _menu_has_import(target):
+        raise WindowInterference("The bound window does not offer EndNote 21 File > Import > File")
+    # Native EndNote 21 command 32777 opens resource 135, the Import File dialog.
+    win32gui.PostMessage(target.hwnd, WM_COMMAND, 32777, 0)
+    dialog = target.wait_dialog((), lambda _, title: title.casefold() == "import file", timeout)
+    choose = _control(dialog, 1097, "Button")
+    commit = _control(dialog, 1, "Button")
+    if _read_text(commit).replace("&", "").casefold() != "import":
+        raise WindowInterference("Unexpected confirmation button in the Import File dialog")
+    target.require_exclusive((dialog,))
+    win32gui.PostMessage(choose, BM_CLICK, 0, 0)
+    picker = target.wait_dialog((dialog,), lambda _, title: bool(title), timeout)
+    edit = _filename_edit(picker)
+    confirm = _control(picker, 1, "Button")
+    path = ctypes.create_unicode_buffer(str(enw))
+    target.require_exclusive((dialog, picker))
+    _send(edit, 0x000C, 0, ctypes.addressof(path))  # WM_SETTEXT
+    if _read_text(edit) != str(enw):
+        raise WindowInterference("The native file picker did not retain the exact import path")
+    target.require_exclusive((dialog, picker))
+    win32gui.PostMessage(confirm, BM_CLICK, 0, 0)
+    target.wait_dismissed((dialog,), picker, timeout)
+    selected = _read_text(_control(dialog, 1100, "RichEdit20W")).strip()
+    if selected.casefold() not in {str(enw).casefold(), enw.name.casefold()}:
+        raise WindowInterference("The target dialog displays a different import file")
+    _select_import_option(target, dialog)
+    target.require_exclusive((dialog,))
+    if not win32gui.IsWindowEnabled(commit):
+        raise WindowInterference("Native Import button is disabled")
+    win32gui.PostMessage(commit, BM_CLICK, 0, 0)
+    target.wait_dismissed((), dialog, timeout, progress=_is_import_progress)
+
+
+def _is_import_progress(hwnd, title):
+    """Identify the read-only EndNote 21 progress stage, after the owned Import click."""
+    import win32gui
+    if title != "Importing...":
+        return False
+    visible = [(win32gui.GetClassName(c), win32gui.GetDlgCtrlID(c), win32gui.GetWindowText(c))
+               for c in _children(hwnd) if win32gui.IsWindowVisible(c)]
+    return sorted(visible) == [("Button", 2, "Cancel"), ("msctls_progress32", 3000, "")]
 
 
 def run_endnote_import(enl_path: Path, enw_path: Path, timeout: float = 40.0) -> dict[str, object]:
-    """Open EndNote on target .enl, import .enw, and close the spawned instance cleanly."""
-    win32gui, _, _ = _win32()
-    endnote_exe = resolve_endnote_exe()
-    sdb_file = sdb_path_for_enl(enl_path)
-    wal_file = sdb_file.with_name("sdb.eni-wal")
-
+    """Import through the candidate's own library window and owned file picker."""
+    enl_path = Path(enl_path).resolve(strict=True)
+    enw_path = Path(enw_path).resolve(strict=True)
+    if enw_path.suffix.casefold() != ".enw" or not enw_path.is_file():
+        raise ValueError("Expected an existing EndNote tagged import file")
     require_closed_endnote()
-    proc = subprocess.Popen([str(endnote_exe), str(enl_path)])
-    open_deadline = time.monotonic() + timeout
-    main_titles: list[str] = []
-    while time.monotonic() < open_deadline:
-        if proc.poll() is not None:
-            raise RuntimeError(f"EndNote.exe exited prematurely (rc={proc.returncode}) while opening {enl_path.name}")
-        wins = _visible_windows_for_pids({proc.pid})
-        main_titles = [str(w["title"]) for w in wins if w["title"]]
-        if any(
-            t.casefold() in {enl_path.name.casefold(), f"endnote 21 - {enl_path.name}".casefold()}
-            for t in main_titles
-        ):
-            break
-        time.sleep(0.25)
-    else:
-        for win in wins:
-            if win["title"]:
-                win32gui.PostMessage(int(win["hwnd"]), WM_CLOSE, 0, 0)
-        raise RuntimeError(f"Timed out waiting for EndNote window for {enl_path.name}; titles={main_titles}")
-
-    time.sleep(2.5)
-    before_sig = (
-        sdb_file.stat().st_size,
-        sdb_file.stat().st_mtime_ns,
-        wal_file.stat().st_size if wal_file.is_file() else 0,
-        wal_file.stat().st_mtime_ns if wal_file.is_file() else 0,
-    )
-
-    expected_titles = {enl_path.name.casefold(), f"endnote 21 - {enl_path.name}".casefold()}
-    active_titles = [w["title"].casefold() for w in _visible_windows_for_pids({proc.pid}) if w["title"]]
-    if set(list_process_pids("EndNote.exe")) != {proc.pid} or not (set(active_titles) & expected_titles):
-        for win in _visible_windows_for_pids({proc.pid}):
-            if win["title"].casefold() in expected_titles:
-                win32gui.PostMessage(int(win["hwnd"]), WM_CLOSE, 0, 0)
-        raise RuntimeError("EndNote candidate is no longer the sole verified import target")
-    imp = subprocess.Popen([str(endnote_exe), str(enw_path)])
-    import_deadline = time.monotonic() + 30.0
-    activity_seen = False
-    modal_diagnostics: list[dict[str, object]] = []
-    handled_dialogs: list[dict[str, object]] = []
-    last_activity_at = time.monotonic()
-
-    while time.monotonic() < import_deadline:
-        all_pids = {proc.pid, imp.pid}
-        wins = _visible_windows_for_pids(all_pids)
-        dialogs = [w for w in wins if w["class"] == "#32770"]
-        for d in dialogs:
-            title_low = str(d["title"]).casefold()
-            if "import" in title_low or "filter" in title_low:
-                handled = _try_select_endnote_import_filter(int(d["hwnd"]))
-                if handled:
-                    handled_dialogs.append({"window": d, **handled})
-                    continue
-            controls = _inspect_dialog_tree(int(d["hwnd"]))
-            modal_diagnostics.append({"window": d, "controls": controls})
-
-        cur_sig = (
-            sdb_file.stat().st_size,
-            sdb_file.stat().st_mtime_ns,
-            wal_file.stat().st_size if wal_file.is_file() else 0,
-            wal_file.stat().st_mtime_ns if wal_file.is_file() else 0,
-        )
-        if cur_sig != before_sig:
-            if not activity_seen:
-                activity_seen = True
-            last_activity_at = time.monotonic()
-            before_sig = cur_sig
-
-        imp_done = imp.poll() is not None
-        elapsed_quiet = time.monotonic() - last_activity_at
-        if imp_done and not dialogs and ((activity_seen and elapsed_quiet >= 2.5) or elapsed_quiet >= 4.5):
-            break
-        time.sleep(0.25)
-
-    if imp.poll() is None:
+    proc = subprocess.Popen([str(resolve_endnote_exe()), str(enl_path)])
+    target = TargetWindow.bind(proc, enl_path, timeout)
+    try:
+        _targeted_import(target, enw_path, timeout)
+    except WindowInterference:
+        raise  # Preserve the UI when the target or a modal is no longer certain.
+    except Exception:
         try:
-            imp.wait(timeout=5.0)
-        except subprocess.TimeoutExpired:
-            pass
-
-    # Cleanly close only our spawned EndNote instance
-    close_wins = _visible_windows_for_pids({proc.pid})
-    for w in close_wins:
-        if w["class"] != "#32770" and w["title"]:
-            win32gui.PostMessage(int(w["hwnd"]), WM_CLOSE, 0, 0)
-
-    close_deadline = time.monotonic() + 20.0
-    cleanly_closed = False
-    while time.monotonic() < close_deadline:
-        if proc.poll() is not None:
-            cleanly_closed = True
-            break
-        time.sleep(0.25)
-
-    return {
-        "endnote_exe": str(endnote_exe),
-        "main_pid": proc.pid,
-        "import_pid": imp.pid,
-        "import_returncode": imp.poll(),
-        "main_titles": main_titles,
-        "db_activity_seen": activity_seen,
-        "handled_dialogs": handled_dialogs,
-        "unexpected_dialogs": modal_diagnostics,
-        "cleanly_closed": cleanly_closed,
-    }
+            target.close()
+        except (OSError, RuntimeError):
+            pass  # An unknown window or modal keeps the candidate open for local inspection.
+        raise
+    closed = target.close()
+    return {"main_pid": proc.pid, "target_hwnd": target.hwnd, "method": "target_library_import_dialog",
+            "cleanly_closed": closed}
 
 
 def plan_import(items, records, preferred=()):

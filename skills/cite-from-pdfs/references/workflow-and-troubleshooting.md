@@ -49,6 +49,8 @@ Every newly placed PDF needs a `sources` entry. Page 1 is the first page of the 
 
 ## Candidate release and failure
 
+Save and close the input library before starting. During native import, keep other EndNote libraries closed. On the tested English EndNote 21 desktop, the importer opens **File → Import → File** on the verified candidate, observes the native progress control, and waits for EndNote to finish closing before opening the database snapshot. A second library, an unfamiliar dialog or an unrecognized interface language can stop this step. Keep the failure receipt, identify the window, and retry on a fresh candidate when the desktop is ready.
+
 The full `.enl` and paired `.Data` (including groups and attachments) are copied into a new directory. The original remains the recovery source. Import fails an isolated candidate if the database closes uncleanly, if new IDs are ambiguous, or if its record delta differs from the plan. The wrapper also checks bibliographic identity and library binding after Word has saved. Keep the diagnostic work directory as evidence. A failed run does not publish the delivery directory. Correct the input or close an attempt-owned stuck dialog normally, then retry using a new destination. The retired metadata-only in-place rollback command can leave mismatched files and should never be used.
 
 For fully verified library-only import, `scripts/sync_to_endnote.py` accepts the read-only `--enl`, a fresh `--candidate-dir`, `--catalog`, `--select-pdf-ids`, `--work-dir` and `--output`. Use `apply_citations.py` for the coordinated Word and library release.

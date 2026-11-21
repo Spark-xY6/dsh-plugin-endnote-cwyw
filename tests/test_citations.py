@@ -99,6 +99,26 @@ class CitationTests(unittest.TestCase):
         with self.assertRaises(IdentityReview):
             RecordIndex({4: article("old")}).match(conflicting)
 
+    def test_short_titles_with_reused_identifier(self):
+        for identity in ({"doi": "10.5555/demo-a"}, {"doi": "", "pmid": "1234"}):
+            original = article("old", title="Sleep and memory", first_author_family="Smith", **identity)
+            unrelated = article("new", title="Cardiac fibrosis", first_author_family="Jones", **identity)
+            with self.subTest(identity=identity), self.assertRaises(IdentityReview):
+                plan_import([unrelated], {4: original})
+            for alternate in ("Sleep and memory: an overview", "Sleep-and-memory"):
+                variant = {**original, "pdf_id": "variant", "title": alternate}
+                with self.subTest(identity=identity, alternate=alternate):
+                    self.assertEqual(RecordIndex({4: original}).match(variant), 4)
+
+    def test_generic_title_prefix_cannot_hide_reused_identifier(self):
+        for identity in ({"doi": "10.5555/demo-a"}, {"doi": "", "pmid": "1234"}):
+            old = article("old", title="Sleep", first_author_family="Smith", **identity)
+            for author in ("Jones", ""):
+                new = article("different", title="Sleep quality after surgery",
+                              first_author_family=author, journal="Another Journal", **identity)
+                with self.subTest(identity=identity, author=author), self.assertRaises(IdentityReview):
+                    plan_import([new], {8: old})
+
     def test_existing_metadata_and_pdf_alias_keep_attachment(self):
         selected = article("pdf", doi="", pdf_path="illustrative.pdf", pdf_sha256="sample-digest")
         _, pending, aliases = plan_import([selected, article("embedded")], {})

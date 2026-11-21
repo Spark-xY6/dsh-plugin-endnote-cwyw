@@ -44,22 +44,22 @@ def compare(left: Identity, right: Identity) -> str:
     sufficient_title = min(len(compact_left), len(compact_right)) >= 28
     ratio = 0.0
     if (
-        not same_title and sufficient_title
-        and (same_author or same_doi or same_pmid)
+        not same_title and compact_left and compact_right
+        and ((sufficient_title and same_author) or same_doi or same_pmid)
         and abs(len(compact_left) - len(compact_right)) <= max(len(compact_left), len(compact_right)) * .12
     ):
         ratio = SequenceMatcher(None, compact_left, compact_right, autojunk=False).ratio()
     if same_doi or same_pmid:
         shorter, longer = sorted((left.title, right.title), key=len)
         expanded_title = longer.startswith(shorter + " ")
-        incompatible_attribution = (
-            left.author and right.author and not same_author and left.year and right.year
-            and abs(int(left.year) - int(right.year)) > 1
-        )
-        if doi_conflict or pmid_conflict or incompatible_attribution or (
-            sufficient_title and not same_title and not expanded_title and ratio < .87
-        ):
+        different_authors = bool(left.author and right.author and not same_author)
+        if doi_conflict or pmid_conflict or different_authors:
             return "conflict"
+        if compact_left and compact_right and not same_title:
+            if not sufficient_title and not same_author:
+                return "conflict"
+            if not expanded_title and ratio < .87:
+                return "conflict"
         return "doi" if same_doi else "pmid"
     if doi_conflict or pmid_conflict:
         return "conflict" if same_title or (same_author and ratio >= .94) else "different"
