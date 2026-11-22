@@ -12,7 +12,7 @@
 
 - **Cross-library record ID collisions**: Record `#60` in a collaborator's draft often points to a completely different paper in your library.
 - **Duplicate imports**: Two renamed PDFs of the same paper create duplicate numbers and split bibliography entries.
-- **Open-source gaps & bare-agent fragility**: Existing scripts either inject static/raw XML without verifying PDF evidence or require hand-inserted markers, while bare agents leave throwaway scripts behind and fail to attach newly cited PDFs into the delivered EndNote library.
+- **Open-source gaps & bare-agent model fragility**: Running EndNote/Word CWYW automation bare heavily depends on flagship model capability—most weaker models repeatedly fail, loop, or stall on COM window handling, PDF verification, and record ID rebinding with very low efficiency, while even flagship bare runs leave throwaway scripts behind and fail `0/2` to attach newly cited PDFs into the delivered EndNote library.
 
 ---
 
