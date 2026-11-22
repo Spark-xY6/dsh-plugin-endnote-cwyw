@@ -1,52 +1,59 @@
-# PDF citations for EndNote and Word
+# PDF-Backed Editable EndNote Citations for Word (`dsh-plugin-endnote-cwyw`)
 
-[中文使用说明](README.zh.md) · [Controlled comparison](docs/comparison.md) · [Desktop evaluation](docs/evaluation.md) · [Related projects](docs/landscape.md)
+[中文说明](README.zh.md) · [Controlled Comparison](docs/comparison.md) · [Desktop Evaluation](docs/evaluation.md) · [Related Projects](docs/landscape.md)
 
-[![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for the v0.1.0 tag](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
+[![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for v0.1.0](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
 
-A DeepSeek Harness plugin for a familiar handoff: your collaborator sends a partly cited Word draft, you have an older EndNote library and a folder of PDFs, and both of you want to keep using **Edit & Manage Citation(s)** in Word. The plugin delivers an updated library copy and a DOCX containing live EndNote citations. One work can appear at several places in the text while retaining a single bibliography entry.
+**In plain English:** Hand this plugin a partly cited Word draft, a folder of PDFs, and your EndNote library (`.enl` + `.Data`). It verifies exact supporting quotes on physical PDF pages, deduplicates and matches against your target library without breaking existing record numbers, attaches the new PDFs inside a safe library copy, and runs the official Word EndNote CWYW add-in so your collaborator receives a **fully editable Word + EndNote library pair**.
 
-**v0.1.1 passed a native cross-library edit test.** Record 60 in the incoming draft referred to another work in the target library. The packaged workflow rebound the citation to record 1, reused a misspelled DOI-free record twice and added one missing work. After removal and reinsertion in Word, the three saved documents contained 3, 2 and 3 bibliography entries. The study retains the stopped shared-desktop run of v0.1.0. [Comparison and test scope](docs/comparison.md)
+---
 
 ## Why build this?
 
-A record number belongs to one EndNote library. The number from someone else's draft can point to another paper in yours. Importing a slightly different title for a paper you already cite can give it a second number. The library may also contain several plausible papers for a claim. This workflow treats these as separate decisions: find supporting words on a PDF page, identify the paper in the target library, then ask the official EndNote Word add-in to format the citation.
+- **Cross-library record ID collisions**: Record `#60` in a collaborator's draft often points to a completely different paper in your library.
+- **Duplicate imports**: Two renamed PDFs of the same paper create duplicate numbers and split bibliography entries.
+- **Open-source gaps & bare-agent fragility**: Existing scripts either inject static/raw XML without verifying PDF evidence or require hand-inserted markers, while bare agents leave throwaway scripts behind and fail to attach newly cited PDFs into the delivered EndNote library.
 
-PubMate's read-only preview and per-identifier reports informed our import preview. JabRef and Zotero inspired showing the fields that support or contradict a proposed match. The public evaluation exercises what happens after delivery when a contributor removes a citation and inserts it again. [Comparison, sources and adopted ideas](docs/landscape.md)
+---
 
-## Install
+## Measured Input -> Output Result
 
-Use an interactive Windows desktop with Word, EndNote and its working Cite While You Write (CWYW) add-in. The tested host is DSH `0.2.2-rc.5` with Node 24.13.0 and EndNote 21. Run DSH on the same desktop, with its agent allowed to read the three inputs and execute local PowerShell. [DSH plugin installation](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish)
+![dsh-plugin-endnote-cwyw Input to Output desktop showcase](docs/images/endnote-workflow-showcase.png)
+
+| Capability | Bare Agent (`gpt-6.2-astra`) | Open-Source Tools (PubMate / endnote-insert / etc.) | With `dsh-plugin-endnote-cwyw` (`v0.1.1`) |
+| :--- | :--- | :--- | :--- |
+| **Live CWYW editable fields + round-trip delete/reinsert** | Passed (`4->3->4`, `3->2->3`), wrote 6–9 helper scripts | Require pre-marked IDs/DOIs or emit raw fields without target-library rebinding | **Verified live `EN.CITE` + `EN.REFLIST`**: reopen in Word, delete, reopen, reinsert -> **3 -> 2 -> 3** entries |
+| **Full-text PDF attached in delivered library** | **0/2 new papers** attached | Not automated with PDF page verification | **2/2 newly cited PDFs attached** with matching SHA-256 bytes |
+| **Cross-library ID collision rebinding (`v0.1.1`)** | Required manual/ad-hoc scripting | Not supported out-of-the-box | Rebound stale `#60` -> `#1`, reused misspelled DOI-free `#2`, imported only 1 missing paper (`60 -> 61`) |
+| **Dual-library safety interlock** | None | No same-PID multi-window guard | **Refuses import and preserves both libraries** if another EndNote library window is open in the same process |
+| **Retained throwaway scripts** | **6–9 scripts (8.8–10.4 KB)** | — | **0–1 script (0–2.1 KB)** |
+
+*Honest scope note:* On two external DOI/PMID-free bibliographic deduplication datasets (`stroke` and `haematology`), the plugin achieved 100% precision with 93.1% and 57.6% recall (vs specialized deduplicator BibDedupe at 99.6% and 83.0%, 0 false merges for both). See [Controlled Comparison](docs/comparison.md) for all raw metrics and caveats.
+
+---
+
+## 1-Minute Install & Prompt
+
+Requires Windows desktop with **Microsoft Word + EndNote** (verified on EndNote 21 + Word 16), Python 3.10+, and DeepSeek Harness (`0.2.2-rc.5` tested).
 
 ```powershell
 git clone --branch v0.1.1 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
 cd dsh-plugin-endnote-cwyw
-# Use a Python 3.10+ environment of your choice for the agent and this command.
 python -m pip install -r requirements.txt
 dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.1
 ```
 
-Restart the profile after installation. The bundle registers **cite-from-pdfs** and **endnote-cwyw**. The repository also works with filesystem-skill hosts that can run local commands: copy both directories under `skills/` together. For a specific installation or contributor test, use the Git commit shown on the release. [Releases](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/releases)
+Restart the DSH profile, save Word and close EndNote, keep inputs outside the repo, and ask:
 
-## Use it with a draft
+> Use cite-from-pdfs with my PDFs folder, Library.enl (with sibling .Data), and Draft.docx. Cite only where a physical PDF page supports the sentence, leave unsupported claims blank for review, reuse existing library records, work strictly on copies, and deliver an editable Word + EndNote library pair.
 
-1. Save the draft and close the source EndNote library cleanly. Keep the `.enl` next to its matching `.Data` directory. Choose a new output folder outside the library. Keep all inputs and work files outside the Git checkout.
-2. Give the agent local paths. Example: **“Use cite-from-pdfs with my PDFs folder, Library.enl and Draft.docx. Add citations only where a PDF page supports my sentence. Reuse existing records. Work on copies, deliver the updated Word and library together, and list claims or matches that need review.”**
-3. The agent builds the plan, reads the supporting pages, previews import/reuse decisions, then prepares, formats and audits the result. To inspect decisions first, ask **“Preview only.”** In that mode the agent produces a private JSON review with the proposed record numbers and field differences.
-4. Open the delivered library and then `manuscript_cwyw.docx`. Use the EndNote tab to insert, edit or remove citations. Keep the updated `.enl` **and** its `.Data` directory together when sending the pair to your collaborator. The local `audit.json` records the checks for that pair. [CLI commands and plan format](skills/cite-from-pdfs/references/workflow-and-troubleshooting.md)
+Add **"Preview only"** to inspect proposed reuse/import decisions in JSON before touching any Word or library copy.
 
-## Evidence and limits
+---
 
-On the supplied EndNote 21 sample library, selecting two filenames for the same public paper added **one** record (190 → 191). Reopening the delivery, removing that paper in Word and reinserting it changed the saved bibliography counts **2 → 1 → 2**. Running again with the updated library added **zero** records (191 → 191).
+## Further Reading & License
 
-Four fresh sessions of the same Codex model then received the same unmarked five-paragraph draft and four PDFs. Both runs **with the skills** and both **without them** selected all three supported sites, left the fabricated trial uncited and delivered four live citations linked to three entries. Both skill runs also included the two newly cited PDFs in the delivered library. Neither bare run included them. This is one manuscript. The isolated DSH profile was checked for package loading separately. [Controlled comparison and replication materials](docs/comparison.md) · [Desktop results](docs/evaluation.md)
-
-On two external bibliographic datasets without DOI or PMID, the plugin's automatic duplicate-pair recall was 93.1% and 57.6%. BibDedupe 0.11.0 achieved 99.6% and 83.0%. Both produced zero false automatic matches against these labels. The comparative report also covers three EndNote utilities run on the same original draft and on inputs with hand-supplied markers. GitHub Actions checks registration and synthetic regressions. [Comparison](docs/comparison.md) · [GitHub Actions](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions)
-
-The automatic route is for genuine EndNote fields in the document body. Hand-typed numbers, Zotero or Mendeley fields, citations inside notes, and custom citation display overrides require separate review. The agent judges whether a passage supports a claim. The software verifies the quoted words on the specified physical PDF page. It indexes searchable text from up to the first twelve pages; the agent can read later pages directly. Image-only scans need readable text for quote verification. The project has no cross-corpus accuracy estimate.
-
-## Privacy, licensing and contributions
-
-The Python tools use local files. Online metadata enrichment is optional and can send a PDF-derived title, DOI or arXiv ID to Crossref, OpenAlex or PubMed. A DSH session may send manuscript text or tool output to its configured model provider. Choose a provider and permissions suitable for your documents. Raw reports can contain paths, titles and manuscript text.
-
-The plugin source is MIT-licensed. Microsoft Word and Clarivate EndNote are separate products. Python dependencies retain their own licenses, including PyMuPDF's AGPL/commercial options. To contribute, start with a synthetic case or public DOI and the observed result. [License](LICENSE) · [PyMuPDF terms](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright) · [Contributor guide](CONTRIBUTING.md)
+- 📊 **[Controlled Comparison vs Bare Agent, 3 Open-Source Tools & BibDedupe](docs/comparison.md)**
+- 🖥️ **[Desktop Reproduction & Acceptance Guide](docs/evaluation.md)** · **[Landscape & Adopted Ideas](docs/landscape.md)**
+- ⚙️ **[CLI Commands & Plan Schema](skills/cite-from-pdfs/references/workflow-and-troubleshooting.md)**
+- **License & Privacy**: Local-first indexing (up to 12 pages per PDF automatically; agent can inspect later pages). Optional Crossref/OpenAlex/PubMed metadata lookups. Source code under [MIT](LICENSE); third-party Python dependencies and commercial Office/EndNote remain under their respective terms.
