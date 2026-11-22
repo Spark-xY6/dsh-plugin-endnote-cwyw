@@ -4,31 +4,33 @@
 
 [![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for v0.1.0](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
 
-**In plain English:** Hand this plugin a partly cited Word draft, a folder of PDFs, and your EndNote library (`.enl` + `.Data`). It verifies exact supporting quotes on physical PDF pages, deduplicates and matches against your target library without breaking existing record numbers, attaches the new PDFs inside a safe library copy, and runs the official Word EndNote CWYW add-in so your collaborator receives a **fully editable Word + EndNote library pair**.
+Hand this plugin a partly cited Word draft, a folder of PDFs, and your EndNote library (`.enl` + `.Data`). It verifies exact supporting quotes on physical PDF pages, deduplicates and aligns against your target library without breaking existing record numbers, attaches full-text PDFs inside a safe library copy, and invokes the official Word EndNote CWYW add-in so collaborators receive a **genuinely editable Word + EndNote library pair**.
 
 ---
 
-## Why build this?
+## Why Deterministic Tooling Beats Bare Desktop Scripting
 
-- **Cross-library record ID collisions**: Record `#60` in a collaborator's draft often points to a completely different paper in your library.
-- **Duplicate imports**: Two renamed PDFs of the same paper create duplicate numbers and split bibliography entries.
-- **Open-source gaps & bare-agent model fragility**: Running EndNote/Word CWYW automation bare heavily depends on flagship model capability—most weaker models repeatedly fail, loop, or stall on COM window handling, PDF verification, and record ID rebinding with very low efficiency, while even flagship bare runs leave throwaway scripts behind and fail `0/2` to attach newly cited PDFs into the delivered EndNote library.
+- **Bare runs depend heavily on flagship model luck**: Asking an ordinary coding agent to ad-hoc script Windows COM interfaces, CWYW field encodings, PDF attachment parsing, and multi-library locks leads to repeated loops, errors, or dead superscript text—and even a flagship baseline (`gpt-6.2-astra`) left `6–9` throwaway scripts behind and attached `0/2` full-text PDFs.
+- **Cross-library record ID collisions**: Record `#60` in a collaborator's document often maps to a completely different paper in your local EndNote library.
+- **Duplicate imports**: Two renamed copies of the same PDF produce duplicate citation numbers and split bibliographies.
 
 ---
 
-## Measured Input -> Output Result
+## Live Word 16 + EndNote 21 Desktop Result
 
-![dsh-plugin-endnote-cwyw Input to Output desktop showcase](docs/images/endnote-workflow-showcase.png)
+Rendered from Word 16 on a shared neutral English benchmark: **Left** shows live superscripts `1–3` inserted from physical PDFs while the unsupported 5th claim stays intentionally blank; **Right** shows deleting citation `3` directly inside Microsoft Word and watching the reference list automatically shrink **`3 → 2`**:
+
+![dsh-plugin-endnote-cwyw live Word 16 CWYW deletion 3 to 2 showcase](docs/images/endnote-workflow-showcase.png)
 
 | Capability | Bare Agent (`gpt-6.2-astra`) | Open-Source Tools (PubMate / endnote-insert / etc.) | With `dsh-plugin-endnote-cwyw` (`v0.1.1`) |
 | :--- | :--- | :--- | :--- |
-| **Live CWYW editable fields + round-trip delete/reinsert** | Passed (`4->3->4`, `3->2->3`), wrote 6–9 helper scripts | Require pre-marked IDs/DOIs or emit raw fields without target-library rebinding | **Verified live `EN.CITE` + `EN.REFLIST`**: reopen in Word, delete, reopen, reinsert -> **3 -> 2 -> 3** entries |
-| **Full-text PDF attached in delivered library** | **0/2 new papers** attached | Not automated with PDF page verification | **2/2 newly cited PDFs attached** with matching SHA-256 bytes |
-| **Cross-library ID collision rebinding (`v0.1.1`)** | Required manual/ad-hoc scripting | Not supported out-of-the-box | Rebound stale `#60` -> `#1`, reused misspelled DOI-free `#2`, imported only 1 missing paper (`60 -> 61`) |
-| **Dual-library safety interlock** | None | No same-PID multi-window guard | **Refuses import and preserves both libraries** if another EndNote library window is open in the same process |
-| **Retained throwaway scripts** | **6–9 scripts (8.8–10.4 KB)** | — | **0–1 script (0–2.1 KB)** |
+| **Model stability & clean workspace** | Ordinary models stall on COM/encoding loops; strong baseline left **6–9 ad-hoc scripts (8.8–10.4 KB)** | Often lack same-PID dual-library safety locks | Deterministic pipeline; reliable without top-tier model luck (**0–1 helper script**) |
+| **Live CWYW editable fields (`3 -> 2 -> 3`)** | Passed via fragile custom scripts | Require pre-marked IDs/DOIs or leave bibliography unrefreshed | **Verified live `EN.CITE` + `EN.REFLIST`**: delete in Word -> reopen -> reinsert -> **3 -> 2 -> 3** entries |
+| **Full-text PDF attached in library** | **0/2 new papers** attached | Not coupled with physical PDF page verification | **2/2 newly cited PDFs attached** with verified SHA-256 bytes |
+| **Cross-library ID collision rebinding (`v0.1.1`)** | Required manual scripting | Not supported out-of-the-box | Rebound stale `#60` -> `#1`, reused misspelled DOI-free `#2`, imported only 1 missing paper (`60 -> 61`) |
+| **Dual-library safety interlock** | None | No same-PID multi-window guard | **Refuses writes and preserves both libraries** if another EndNote library is open in the same process |
 
-*Honest scope note:* On two external DOI/PMID-free bibliographic deduplication datasets (`stroke` and `haematology`), the plugin achieved 100% precision with 93.1% and 57.6% recall (vs specialized deduplicator BibDedupe at 99.6% and 83.0%, 0 false merges for both). See [Controlled Comparison](docs/comparison.md) for all raw metrics and caveats.
+*Honest scope note:* On two external DOI/PMID-free bibliographic deduplication datasets (`stroke` and `haematology`), the plugin achieved **100% precision** (zero false merges) with `93.11%` and `57.58%` recall (vs dedicated deduplicator `BibDedupe` at `99.58%` and `83.03%`). See [Controlled Comparison](docs/comparison.md) for all raw metrics and caveats.
 
 ---
 
