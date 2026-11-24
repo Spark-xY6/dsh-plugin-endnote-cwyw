@@ -2,11 +2,18 @@
 
 [简体中文](README.md) · English · [Workflow & Troubleshooting](skills/cite-from-pdfs/references/workflow-and-troubleshooting.md) · Original `.enl`, PDFs & DOCX stay read-only
 
-**Preview every `[+Cite]` sentence anchor, verbatim PDF page excerpt, and reuse-vs-import library diff before touching anything—then merge new papers with attached PDFs into an isolated `.enl + .Data` copy and deliver genuine Word EndNote CWYW citations you can delete, add, or restyle anytime.**
+**Asking a general LLM to drive desktop Word and EndNote directly often burns 6–9 throwaway scripts on COM permissions, CWYW field escaping, and library focus clashes—while touching your main `.enl` risks corrupting years of references. This plugin separates evidence verification from desktop execution: preview every `[+Cite]` sentence anchor and PDF page quote first, merge into a timestamped copy, and deliver live Word EndNote CWYW citations you can delete or restyle anytime.**
 
 ![Verified PDF page-evidence preview and live Word EndNote CWYW delete/refresh workflow](docs/images/endnote-workflow-showcase.png)
 
-## What to ask your assistant
+## How it works in practice
+
+- **Strict read-only isolation on originals**: Keeps your source `.enl`, `.Data`, PDFs, and `.docx` untouched; all imports and Word formatting run exclusively on timestamped copies with deterministic library-binding checks.
+- **Offline page-grounded preview before writing anything**: Scans two-column PDFs across up to `--max-pages 30` without network calls, filters publisher header slugs, extracts all page-1 authors, matches journal abbreviations and `±1` Epub years, surfaces all edited/missing manuscript sentences in a single batch preview, and leaves unsupported claims blank rather than guessing references.
+- **Exact journal punctuation & live CWYW bibliography updates**: Places English `Nature*` citations immediately after `.` with zero space (`result.²`), places Chinese citations before `。` (`结果²。`), deduplicates renamed PDFs on import with **`2/2` full-text attachments** preserved (vs `0/2` in bare runs), and updates live inside Word + EndNote 21 (`3 → 2 → 3` and `2 → 1 → 2` when citations are deleted and reinserted).
+- **100% precision on public deduplication benchmarks**: Achieved **`100%` precision (`0` false merges)** across CoLRev’s 1,292-record stroke and 1,415-record haematology benchmarks (`93.1%` / `57.6%` recall, routing ambiguous pairs to manual review). *(Note: `.enl` import and CWYW field formatting require an interactive Windows desktop with Microsoft Word and EndNote.)*
+
+## Example prompts
 
 | Goal | Prompt (provide manuscript, PDF folder & `.enl` path) |
 | --- | --- |
@@ -14,14 +21,7 @@
 | Deliver live Word + library copy | “Apply the approved plan on copies and deliver `manuscript_cwyw.docx`, its matching `.enl + .Data` copy, and the audit report.” |
 | Convert or repair CWYW fields | “Inspect citation fields in `Draft.docx` and convert static citations into refreshable EndNote CWYW fields on a copy.” |
 
-## Why it exists, what it does & verified results
-
-- **Deterministic Word + EndNote automation without risking your library**: Bare AI runs over desktop Word and EndNote often burn 6–9 throwaway scripts and fail on COM, CWYW field syntax, or multi-library focus clashes. This plugin locks every run to timestamped copies, leaving your original `.enl`, `.Data`, PDFs, and DOCX untouched.
-- **Page-grounded preview & offline PDF parsing**: Reads two-column PDFs across up to `--max-pages 30`, filters publisher header slugs, extracts all page-1 authors offline, matches journal abbreviations and `±1` Epub years, flags all edited/missing draft sentences in one batch pass, and refuses to fabricate citations for unsupported claims.
-- **Exact punctuation placement & live CWYW updates**: Places English Nature citations directly after `.` with zero space (`result.²`), Chinese citations before `。` (`结果²。`), and attaches full-text PDFs on copy import (`2/2` vs `0/2` bare). Deleting or reinserting citations inside Word + EndNote 21 updates the bibliography live (`3 → 2 → 3` and `2 → 1 → 2`).
-- **Zero false merges on public deduplication benchmarks**: Achieved **100% precision (0 false merges)** across CoLRev’s 1,292-record stroke and 1,415-record haematology sets (`93.1%` / `57.6%` recall, routing ambiguous pairs to manual review). *(Note: importing into `.enl` and refreshing CWYW fields requires an interactive Windows desktop with Microsoft Word and EndNote.)*
-
-## Install (Windows Word + EndNote, Python 3.10+)
+## Installation (Windows Word + EndNote, Python 3.10+)
 
 Close EndNote cleanly before running:
 

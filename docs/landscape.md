@@ -1,4 +1,4 @@
-# Why add an EndNote workflow to DeepSeek Harness?
+# EndNote & Word Citation Workflows: Existing Tools and Design Choices
 
 A collaborator sends a Word draft with live EndNote citations. You have an older EndNote library and a folder of PDFs. Two PDFs describe the same paper under slightly different titles. An old record number in the draft also points to a different paper in your library. The practical question is whether you can add the missing evidence and give the collaborator a Word file they can keep editing with EndNote.
 
