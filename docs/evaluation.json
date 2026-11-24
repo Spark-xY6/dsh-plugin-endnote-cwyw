@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "date": "2026-11-21",
-  "release": "0.1.0",
+  "date": "2026-11-24",
+  "release": "0.3.0",
   "platform": {
     "os": "Windows",
     "word": "16.0.17932.21140",
     "endnote": "21.0.0 build 17096",
     "dsh": "0.2.2-rc.5"
   },
-  "test_scope": "Native backend with a fixed public evidence plan, isolated community package replay and saved-document edits",
+  "test_scope": "Windows Word 16 + EndNote 21 live CWYW 2->1->2 round-trip, DSH 0.2.2-rc.5 isolated profile load, batch PDF page/excerpt preview, zero-space Nature post-period placement, and 59 offline unit tests",
   "public_inputs": {
     "source": "EndNote 21 example library plus authored two-paragraph manuscript",
     "selected_pdf_files": 2,
@@ -112,7 +112,7 @@
   "source_files_total": 7,
   "dsh_profile_skills_loaded": 2,
   "identical_packaged_python_files": 13,
-  "offline_python_cases_passed": 21,
+  "offline_python_cases_passed": 59,
   "dsh_package_tests_passed": 2,
   "model_driven_selection_tested": false,
   "known_limit": "Embedded paragraph breaks in bibliographic metadata can split one visible entry into two paragraphs. The exact-count gate rejects the resulting document."

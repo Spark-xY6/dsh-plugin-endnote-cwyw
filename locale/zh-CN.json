@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "为 Word 增补可编辑的 EndNote 引文",
-    "description": "在 Windows 上依据 PDF 原文为稿件增补引文，并交付配套的 EndNote 文献库。",
-    "detail": "README.zh.md"
+    "description": "预演增补哪一句（Nature 自动置标点后无空格）、核对 PDF 证据页与已有记录去重，再把可编辑引文和配套 EndNote 库写回 Word 副本。",
+    "detail": "README.md"
   }
 }

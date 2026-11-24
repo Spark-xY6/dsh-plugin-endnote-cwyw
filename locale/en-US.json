@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Editable EndNote citations for Word",
-    "description": "Use evidence from PDFs to extend a Word manuscript and its EndNote library on Windows.",
-    "detail": "README.md"
+    "title": "Editable EndNote Citations for Word",
+    "description": "Preview target sentences, verbatim PDF evidence pages, and library reuse/import diffs, then add live CWYW citations with a paired EndNote library.",
+    "detail": "README.en.md"
   }
 }

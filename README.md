@@ -1,38 +1,32 @@
-# PDF-Backed Editable EndNote Citations for Word · dsh-plugin-endnote-cwyw
+# EndNote 引文助手：给 Word 增补可编辑引文 (`dsh-plugin-endnote-cwyw`)
 
-[中文说明](README.zh.md) · [Controlled Comparison](docs/comparison.md) · [Desktop Evaluation](docs/evaluation.md) · [Related Tools](docs/landscape.md)
+[English](README.en.md) · [完整工作流](skills/cite-from-pdfs/references/workflow-and-troubleshooting.md) · 原稿、原 `.enl` 文献库与 PDF 全程只读
 
-[![Community checks on main](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/workflows/checks.yml?query=branch%3Amain) · [Checks for v0.1.0](https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw/actions/runs/44836288185)
+**动库和改文档前，先摊开「要插在哪一句、依据来自 PDF 哪一页原文、会复用已有记录还是新增一条」让你核对；再把增量文献写进独立 `.enl + .Data` 副本并挂上全文 PDF，最终由 Word 官方 EndNote CWYW 渲染出可随时删引、补插、换样式的真动态引文。**
 
-Hand this plugin a partly cited Word draft, a folder of PDFs, and your EndNote library (`.enl` + `.Data`). It verifies exact supporting claims on physical PDF pages, deduplicates and realigns records against your target library without breaking existing numbers, attaches full-text PDFs inside a safe library copy, and runs the official Word EndNote CWYW add-in so collaborators receive a **genuinely editable Word + EndNote library pair**.
+![核对 PDF 原页依据后再写入 Word 的 EndNote 真动态引文与删引实拍](docs/images/endnote-workflow-showcase.png)
 
-## Why Deterministic Tooling Beats Bare Desktop Scripting
+## 直接这样对 AI 说
 
-Asking a general coding agent to ad-hoc script Windows COM automation, CWYW field encodings, PDF attachment parsing, and multi-library locks hinges heavily on flagship model luck. Outside top-tier models, agents routinely stall or loop through `6–9` broken helper scripts before giving up—and even a flagship baseline (`gpt-6.2-astra`) failed `0/2` times to attach newly cited full-text PDFs into its delivered EndNote library.
+| 你的需要 | 发给助手（附稿件、PDF 目录和 `.enl` 路径） |
+| --- | --- |
+| 先核对插点位置与 PDF 原页证据 | “用 cite-from-pdfs 为《文稿.docx》预演加引文：PDF 在 `Papers`，EndNote 库是 `Library.enl`。先列目标句 `[+Cite]` 位置、对应 PDF 页码摘录和复用/新增明细，再执行写库。” |
+| 确认后交付可编辑 Word + 副本库 | “按确认方案在独立副本上写库加引文，把可编辑 Word、配套 `.enl + .Data` 副本库与检查报告一起交给我。” |
+| 静态引文转为真 CWYW 动态域 | “用 endnote-cwyw 检查《文稿.docx》的域代码，在副本上转换成可被 EndNote 实时刷新的动态引文。” |
 
-Packaging those fragile steps into tested tooling lets everyday models complete the full desktop cycle cleanly. On a shared neutral English draft rendered in Word 16 + EndNote 21, the left page shows verified `1–3` live superscripts while an unsupported 5th claim stays intentionally blank; the right page shows deleting citation `3` directly in Word and watching the reference list automatically shrink **`3 -> 2`**:
+## 为什么做、有什么用与实测效果
 
-![Word 16 live CWYW render showing blank unsupported claim and 3-to-2 shrinking list after deletion](docs/images/endnote-workflow-showcase.png)
+- **告别“看模型运气”且不碰主文献库**：让通用 AI 裸跑操作桌面端 Word 与 EndNote，往往在 COM 接口、域码转义或双库干扰上连写 6–9 套临时脚本仍失败。插件把整条工作链固化并严格隔离在时间戳副本中运行，原 `.enl`、`.Data`、PDF 与 Word 原稿全程只读不改。
+- **逐句核对 PDF 原页后再动库，无据句克制留空**：离线解析无网 PDF（跳过页眉排版代号、首页提全作者、支持双栏与前 30 页扫描、常见刊名缩写及跨年 `±1` 匹配）；批量预演一次性标出正文已删改句子和缺摘录条目，PDF 查无依据的断言主动留空不瞎编。
+- **期刊标点精确定位 + 真动态域联动**：英文 `Nature*` 样式下引文紧贴句号后零空格（`result.²`），中文置于全角句号前（`结果²。`），支持曲引号与批注段落；实测同篇或改名 PDF 自动合库去重并完整挂载全文附件（裸跑对照多次漏附全文），在 Word + EndNote 21 内直接删掉第 3 处引文并刷新，正文上标与文末参考文献列表随之 `3 → 2 → 3`（及 `2 → 1 → 2`）实时收缩恢复。
+- **零误合并的大规模书目基准**：在 CoLRev 公开的卒中（1,292 条）与血液学（1,415 条）去重基准集上，自动判同精确率 **100%（0 误合并）**，模糊临界条目自动单列供人工复核。*注：写库与刷新 CWYW 动态域需在本地 Windows 桌面环境运行 Microsoft Word 与 EndNote。*
 
-## Measured Results & Honest Scope
+## 30 秒安装
 
-- **Live editable CWYW fields & PDF attachments**: Delivered Word documents carry real `EN.CITE` + `EN.REFLIST` fields that survived round-trip Word edits (`3 -> 2 -> 3` and `4 -> 3 -> 4`), with **`2/2` newly cited full-text PDFs** attached (SHA-256 verified) and `0–1` helper scripts vs `6–9` when bare.
-- **Cross-library rebinding & dual-library lock**: Automatically rebound stale collaborator `#60` to `#1`, reused misspelled DOI-free `#2`, worked strictly on library copies, and refused writes whenever another `.enl` window was already open in the same EndNote process.
-- **Deduplication caveat**: On two external DOI/PMID-free bibliographic benchmarks (`stroke` and `haematology`), conservative rules achieved **100% precision** (zero false merges) with `93.11%` and `57.58%` recall—for massive identifier-free legacy libraries, pre-clean with dedicated deduplicator `BibDedupe` (`99.58% / 83.03%` recall). Raw numbers live in [docs/comparison.md](docs/comparison.md).
-
-## 1-Minute Setup & Prompt
-
-Requires Windows desktop with **Microsoft Word + EndNote** (verified on EndNote 21 + Word 16), Python 3.10+, and DeepSeek Harness (`0.2.2-rc.5` tested):
+关闭 EndNote 桌面窗口后执行（Python 3.10+，缺依赖时可运行 `conda run -n base python -m pip install -r requirements.txt`）：
 
 ```powershell
-git clone --branch v0.1.1 https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git
-cd dsh-plugin-endnote-cwyw
-python -m pip install -r requirements.txt
-dsh plugin --profile web add github:Spark-xY6/dsh-plugin-endnote-cwyw#v0.1.1
+dsh plugin --profile web add (Resolve-Path '.\dsh-plugin-endnote-cwyw-0.3.0.tgz').Path
 ```
 
-Restart the DSH profile, save Word and close EndNote, keep inputs outside the repo, and ask:
-
-> Use cite-from-pdfs with my PDFs folder, Library.enl (with sibling .Data), and Draft.docx. Cite only where a physical PDF page supports the sentence, leave unsupported claims blank for review, reuse existing library records, work strictly on copies, and deliver an editable Word + EndNote library pair.
-
-Append **"Preview only"** to inspect reuse and import decisions in JSON first. When opening the delivered bundle, **double-click the delivered `.enl` library before opening `manuscript_cwyw.docx`**, and keep `.docx`, `.enl`, and sibling `.Data` together when sharing with collaborators. Further guides: [docs/evaluation.md](docs/evaluation.md), [docs/landscape.md](docs/landscape.md), [workflow-and-troubleshooting.md](skills/cite-from-pdfs/references/workflow-and-troubleshooting.md). Local-first by default; source code under the [MIT License](LICENSE).
+[桌面验证实录](docs/evaluation.md) · [基准对比实验](docs/comparison.md) · [同类工具对比](docs/landscape.md) · [MIT License](LICENSE)
