@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-endnote-cwyw",
-  "version": "0.1.1",
-  "description": "Extend a partially cited Word manuscript from PDFs and an existing EndNote library, with editable citations and an audited library copy.",
+  "version": "0.3.0",
+  "description": "Preview citation locations, supporting PDF pages and library reuse/import diffs, then add editable EndNote CWYW citations and a paired library copy.",
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw.git" },
   "homepage": "https://github.com/Spark-xY6/dsh-plugin-endnote-cwyw#readme",
@@ -28,7 +28,7 @@
   "files": [
     "index.js", "cordis.patch.yml", "icon.svg", "locale/*.json", "requirements.txt",
     "skills/*/SKILL.md", "skills/*/scripts/*.py", "skills/*/references/*.md",
-    "README.md", "README.zh.md", "docs/*.md", "docs/*.html", "docs/evaluation.json",
+    "README.md", "README.en.md", "docs/*.md", "docs/*.html", "docs/evaluation.json", "docs/images/*.png",
     "examples/seed.md", "examples/plan.json", "CONTRIBUTING.md", "SECURITY.md", "LICENSE"
   ]
 }

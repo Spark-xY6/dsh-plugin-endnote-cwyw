@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 import re
 
-from _common import normalize_doi, normalize_title, pubmed_id, text
+from _common import normalize_author_family, normalize_doi, normalize_title, pubmed_id, text
 
 
 @dataclass(frozen=True)
@@ -24,12 +24,25 @@ class Identity:
         return cls(
             normalize_doi(item.get("doi")), pubmed_id(item),
             normalize_title(item.get("title") or item.get("heuristic_title")),
-            normalize_title(item.get("first_author_family")).replace(" ", ""),
+            normalize_author_family(item.get("first_author_family")),
             year if re.fullmatch(r"(?:18|19|20)\d{2}", year) else "",
             normalize_title(item.get("journal")),
             text(item.get("volume")).strip().casefold(),
             normalize_title(item.get("pages")).split(" ", 1)[0],
         )
+
+
+def _journals_compatible(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    stop = {"of", "the", "and", "in", "for", "on", "to"}
+    ltok = [tok for tok in left.split() if tok not in stop]
+    rtok = [tok for tok in right.split() if tok not in stop]
+    if len(ltok) < 2 or len(ltok) != len(rtok):
+        return False
+    return all(b.startswith(a) or a.startswith(b) for a, b in zip(ltok, rtok))
 
 
 def compare(left: Identity, right: Identity) -> str:
@@ -39,6 +52,7 @@ def compare(left: Identity, right: Identity) -> str:
     pmid_conflict = bool(left.pmid and right.pmid and not same_pmid)
     same_author = bool(left.author and left.author == right.author)
     same_year = bool(left.year and left.year == right.year)
+    near_year = bool(same_year or (left.year and right.year and abs(int(left.year) - int(right.year)) <= 1))
     compact_left, compact_right = left.title.replace(" ", ""), right.title.replace(" ", "")
     same_title = bool(compact_left and compact_left == compact_right)
     sufficient_title = min(len(compact_left), len(compact_right)) >= 28
@@ -66,7 +80,7 @@ def compare(left: Identity, right: Identity) -> str:
     same_location = bool(
         left.volume and left.volume == right.volume and left.pages and left.pages == right.pages
     )
-    same_journal = bool(left.journal and left.journal == right.journal)
+    same_journal = _journals_compatible(left.journal, right.journal)
     contradictory = (
         (left.volume and right.volume and left.volume != right.volume)
         or (left.pages and right.pages and left.pages != right.pages)
@@ -75,6 +89,8 @@ def compare(left: Identity, right: Identity) -> str:
     if contradictory and (same_title or (same_author and ratio >= .91)):
         return "ambiguous"
     if same_title and same_author and same_year and (sufficient_title or same_location):
+        return "title_author_year"
+    if same_title and same_author and near_year and sufficient_title and (same_journal or same_location):
         return "title_author_year"
     if same_author and same_year and ratio >= .96 and (same_location or same_journal):
         return "title_variant"

@@ -20,6 +20,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import time
 import tempfile
 from pathlib import Path
 from uuid import uuid4
@@ -139,6 +140,21 @@ def create_library_candidate(source, candidate_dir):
     return candidate, signature
 
 
+def _truncate_abstract(value: object, limit: int = 3000) -> str:
+    cleaned = " ".join(str(value or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    window = cleaned[: limit + 1]
+    for sep in (". ", "! ", "? ", "。"):
+        pos = window.rfind(sep)
+        if pos >= int(limit * 0.6):
+            return window[: pos + len(sep.rstrip())].rstrip()
+    pos = window.rfind(" ")
+    if pos >= int(limit * 0.5):
+        return window[:pos].rstrip()
+    return cleaned[:limit].rstrip()
+
+
 def format_enw_entry(item: dict[str, object]) -> str:
     item = {
         key: " ".join(value.split()) if isinstance(value, str) and key != "pdf_path" else value
@@ -171,7 +187,7 @@ def format_enw_entry(item: dict[str, object]) -> str:
     if item.get("pmid"):
         lines.append(f"%M PMID: {str(item['pmid']).strip()}")
     if item.get("abstract"):
-        clean_abs = " ".join(str(item["abstract"]).split())[:3000]
+        clean_abs = _truncate_abstract(item["abstract"])
         if clean_abs:
             lines.append(f"%X {clean_abs}")
     if item.get("pdf_path"):
@@ -211,7 +227,7 @@ def format_ris_entry(item: dict[str, object]) -> str:
     if item.get("doi"):
         lines.append(f"DO  - {str(item['doi']).strip()}")
     if item.get("abstract"):
-        clean_abs = " ".join(str(item["abstract"]).split())[:3000]
+        clean_abs = _truncate_abstract(item["abstract"])
         if clean_abs:
             lines.append(f"N2  - {clean_abs}")
     lines.append("ER  - ")
@@ -242,14 +258,31 @@ def _read_text(hwnd):
 def _children(parent):
     import win32gui
     controls = []
-    win32gui.EnumChildWindows(parent, lambda hwnd, _: controls.append(hwnd), None)
+
+    def _collect(hwnd, _):
+        controls.append(hwnd)
+        return True
+
+    try:
+        win32gui.EnumChildWindows(parent, _collect, None)
+    except win32gui.error:
+        pass
     return controls
 
 
 def _control(dialog, cid, cls):
     import win32gui
-    found = [h for h in _children(dialog) if win32gui.GetDlgCtrlID(h) == cid
-             and win32gui.GetClassName(h).casefold() == cls.casefold() and win32gui.IsWindowVisible(h)]
+    found = []
+    for h in _children(dialog):
+        try:
+            if (
+                win32gui.GetDlgCtrlID(h) == cid
+                and win32gui.GetClassName(h).casefold() == cls.casefold()
+                and win32gui.IsWindowVisible(h)
+            ):
+                found.append(h)
+        except win32gui.error:
+            continue
     if len(found) != 1:
         raise WindowInterference(f"Cannot identify expected {cls} control {cid} in the target-owned dialog")
     return found[0]
@@ -316,6 +349,22 @@ def _menu_has_import(target):
         win32api.FreeLibrary(dll)
 
 
+def _wait_selected_import(target, dialog, enw, timeout):
+    """The parent import form can show its selection after the picker disappears."""
+    expected = {str(enw).casefold(), enw.name.casefold()}
+    deadline = time.monotonic() + min(timeout, 5)
+    while True:
+        target.require_exclusive((dialog,))
+        selected = _read_text(_control(dialog, 1100, "RichEdit20W")).strip()
+        if selected.casefold() in expected:
+            return
+        if selected:
+            raise WindowInterference("The target dialog displays a different import file")
+        if time.monotonic() >= deadline:
+            raise WindowInterference("The target import form never displayed the selected file")
+        time.sleep(.1)
+
+
 def _targeted_import(target, enw, timeout):
     import win32gui
     target.require_exclusive()
@@ -341,9 +390,7 @@ def _targeted_import(target, enw, timeout):
     target.require_exclusive((dialog, picker))
     win32gui.PostMessage(confirm, BM_CLICK, 0, 0)
     target.wait_dismissed((dialog,), picker, timeout)
-    selected = _read_text(_control(dialog, 1100, "RichEdit20W")).strip()
-    if selected.casefold() not in {str(enw).casefold(), enw.name.casefold()}:
-        raise WindowInterference("The target dialog displays a different import file")
+    _wait_selected_import(target, dialog, enw, timeout)
     _select_import_option(target, dialog)
     target.require_exclusive((dialog,))
     if not win32gui.IsWindowEnabled(commit):
@@ -548,8 +595,23 @@ def main():
     args.work_dir.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="sync-", dir=args.work_dir))
     result = sync_candidate(args.enl, args.candidate_dir, selected_pdfs(args.catalog, ids, work), work)
-    with args.output.open("x", encoding="utf-8") as handle:
-        json.dump(result, handle, ensure_ascii=False, indent=2)
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=args.output.parent, prefix=f".{args.output.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            tmp_path = handle.name
+            json.dump(result, handle, ensure_ascii=False, indent=2)
+        if os.name == "nt":
+            os.rename(tmp_path, args.output)
+        else:
+            os.link(tmp_path, args.output)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
     return 0
 
 

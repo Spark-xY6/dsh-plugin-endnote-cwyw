@@ -20,7 +20,7 @@ import tempfile
 from zipfile import ZipFile
 
 from _common import check_work_path, copy_sdb_snapshot, read_endnote_active_records, read_library_id, sdb_path_for_enl
-from inject_placeholders import inject_into_docx
+from inject_placeholders import inject_into_docx, locate_placements, read_manuscript
 from placement_evidence import verify_plan_evidence
 from reference_identity import Identity, RecordIndex, compare
 from sync_to_endnote import require_closed_endnote, selected_pdfs, sha256_file, sync_candidate, tree_hashes, verify_library_contents
@@ -33,6 +33,15 @@ from rebind_cwyw import document_citations, prepare_rebind, read_citations
 
 
 EQUIVALENT = {"doi", "pmid", "title_author_year", "title_variant"}
+
+
+def _configure_utf8_streams():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
 
 
 def write_json(path, data):
@@ -87,8 +96,10 @@ def apply(args, work, stage):
     if not style:
         raise ValueError("Supply the required EndNote output style in the citation plan")
     plan["style"] = style
+    if plan["insertions"]:
+        _, para_maps = read_manuscript(source)
+        locate_placements(para_maps, plan["insertions"], style=style)
     require_superscript = args.require_superscript or style.casefold() == "nature"
-    plan.setdefault("space_before_citation", True)
     groups = read_citations(source)
     existing = [row for group in groups for row in group.records]
     selected = selected_pdfs(
@@ -252,6 +263,7 @@ def finalize(work, ready):
 
 
 def main():
+    _configure_utf8_streams()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--enl", type=Path)
     parser.add_argument("--docx", type=Path)

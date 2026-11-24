@@ -243,6 +243,166 @@ class CitationTests(unittest.TestCase):
         self.assertIn("injected import interruption", json.loads(failure.read_text(encoding="utf-8"))["error"])
         self.assertEqual([sha256_file(source), sha256_file(db)], original)
 
+    def test_v3_accuracy_normalization_offline_authors_columns_and_nature_spacing(self):
+        import _common
+        from reference_identity import Identity, compare
+        from sync_to_endnote import _truncate_abstract, format_enw_entry
+        import fitz
+
+        # 1. Multi-line DOI, unbalanced parens, and .pdf suffix sensitivity
+        self.assertEqual(_common.normalize_doi("PII S0092\r10.1016/j.cell.2024.01.001."), "10.1016/j.cell.2024.01.001")
+        self.assertEqual(_common.normalize_doi("(doi: 10.1038/s41586-024-00001-1)"), "10.1038/s41586-024-00001-1")
+        self.assertNotEqual(_common.normalize_doi("10.5555/demo.pdf"), _common.normalize_doi("10.5555/demo"))
+
+        # 2. Greek + HTML title normalization and author particle/suffix parsing
+        self.assertEqual(
+            _common.normalize_title("<i>NF-κB</i> &amp; β-catenin pathway"),
+            _common.normalize_title("NF-kappaB & beta-catenin pathway"),
+        )
+        parsed = _common.parse_endnote_authors("Ludwig van Beethoven Jr.\nSmith, John, III")
+        self.assertEqual(parsed[0], {"family": "van Beethoven", "given": "Ludwig"})
+        self.assertEqual(parsed[1], {"family": "Smith", "given": "John"})
+
+        # 3. Journal abbreviation + Epub +/- 1 year match without spurious ambiguity
+        a = Identity.from_record({
+            "title": "Single-cell chromatin accessibility mapping across mouse development",
+            "first_author_family": "Zhang", "year": "2024", "journal": "Biol. Cybern.",
+        })
+        b = Identity.from_record({
+            "title": "Single-cell chromatin accessibility mapping across mouse development",
+            "first_author_family": "Zhang", "year": "2023", "journal": "Biological Cybernetics",
+        })
+        self.assertEqual(compare(a, b), "title_author_year")
+
+        # 4. Sentence/word-safe abstract truncation in .enw export
+        long_abs = ("This sentence stays intact. " * 115) + "Trailing incomplete fragment."
+        enw = format_enw_entry({"title": "Demo", "abstract": long_abs, "authors": [{"family": "Zhang", "given": "Y."}]})
+        abs_line = [ln[3:] for ln in enw.splitlines() if ln.startswith("%X ")][0]
+        self.assertLessEqual(len(abs_line), 3000)
+        self.assertTrue(abs_line.endswith("."))
+
+        # 5. Offline two-column PDF indexing preserves XMP/byline authors + flags scanned PDFs
+        pdf_dir = self.root / "pdfs_v3"
+        pdf_dir.mkdir()
+        col_pdf = pdf_dir / "two_col.pdf"
+        with fitz.open() as doc:
+            page = doc.new_page(width=612, height=792)
+            page.insert_text((60, 70), "Neural Autocorrelation Models of Acoustic Processing in Mammals", fontsize=15)
+            page.insert_text((60, 95), "Alice Smith, Bob van der Berg", fontsize=11)
+            page.insert_textbox(fitz.Rect(50, 140, 280, 210), "Left column first paragraph discussing auditory modeling and filterbanks in full detail.")
+            page.insert_textbox(fitz.Rect(50, 220, 280, 290), "Left column second paragraph reporting empirical response latencies and thresholds.")
+            page.insert_textbox(fitz.Rect(320, 140, 560, 210), "Right column first paragraph continuing the statistical validation across species.")
+            page.insert_textbox(fitz.Rect(320, 220, 560, 290), "Right column second paragraph with conclusion and computational parameters.")
+            doc.save(col_pdf)
+        scan_pdf = pdf_dir / "scanned.pdf"
+        with fitz.open() as doc:
+            doc.new_page()
+            doc.save(scan_pdf)
+        bad_pdf = pdf_dir / "corrupt.pdf"
+        bad_pdf.write_bytes(b"not a real pdf")
+
+        catalog = self.root / "catalog_v3.json"
+        parser = index_pdf_folder.build_parser()
+        args = parser.parse_args(["index", "--pdf-dir", str(pdf_dir), "--work-dir", str(self.root / "idxwork"), "--output", str(catalog)])
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(index_pdf_folder.cmd_index(args), 0)
+        cat_data = json.loads(catalog.read_text(encoding="utf-8"))
+        self.assertEqual(cat_data["skipped_pdf_count"], 1)
+        self.assertEqual(cat_data["max_pages"], 30)
+        by_name = {Path(i["pdf_path"]).name: i for i in cat_data["items"]}
+        self.assertEqual(by_name["two_col.pdf"]["first_author_family"], "Smith")
+        self.assertTrue(by_name["two_col.pdf"]["authors"])
+        self.assertTrue(by_name["scanned.pdf"]["needs_ocr"])
+        text_chunk = by_name["two_col.pdf"]["passages"][0]["text"]
+        self.assertLess(text_chunk.index("Left column second"), text_chunk.index("Right column first"))
+
+        # 6. Nature style places citation after English period with ZERO leading space, and before Chinese period
+        en_zh = self.root / "nature_place.docx"
+        en_zh_out = self.root / "nature_placed.docx"
+        doc = Document()
+        doc.add_paragraph("Record the exact steps used to produce each computational result.")
+        doc.add_paragraph("记录每次计算所需的全部步骤。")
+        doc.save(en_zh)
+        entry = {"record_id": 7, "citation_token": "Example, 2024 #7"}
+        inject_into_docx(
+            en_zh,
+            en_zh_out,
+            {
+                "style": "Nature",
+                "insertions": [
+                    {"insertion_id": "C01", "anchor_text": "Record the exact steps used to produce each computational result.", "pdf_ids": ["P1"]},
+                    {"insertion_id": "C02", "anchor_text": "记录每次计算所需的全部步骤。", "pdf_ids": ["P1"]},
+                ],
+            },
+            {"by_pdf_id": {"P1": entry}},
+        )
+        out_paras = [p.text for p in Document(en_zh_out).paragraphs]
+        self.assertEqual(out_paras[0], "Record the exact steps used to produce each computational result.{Example, 2024 #7}")
+        self.assertEqual(out_paras[1], "记录每次计算所需的全部步骤{Example, 2024 #7}。")
+
+        # 7. Multi-author PDF Info parsing + surname particles + uncorroborated arXiv rejection
+        from _common import parse_pdf_meta_authors
+        self.assertEqual(
+            [a["family"] for a in parse_pdf_meta_authors("Alice Smith; Bob Jones")],
+            ["Smith", "Jones"],
+        )
+        self.assertEqual(
+            [a["family"] for a in parse_pdf_meta_authors("Alice Smith, Bob Jones")],
+            ["Smith", "Jones"],
+        )
+        self.assertEqual(
+            parse_pdf_meta_authors("Ludwig van Beethoven"),
+            [{"family": "van Beethoven", "given": "Ludwig"}],
+        )
+        self.assertEqual(
+            compare(
+                Identity.from_record({"title": "Ninth Symphony Acoustics Study in Europe", "first_author_family": "van Beethoven", "year": "2024"}),
+                Identity.from_record({"title": "Ninth Symphony Acoustics Study in Europe", "first_author_family": "Beethoven", "year": "2024"}),
+            ),
+            "title_author_year",
+        )
+
+        # Uncorroborated arXiv lookup must not overwrite the PDF's real title/authors
+        arxiv_dir = self.root / "pdfs_arxiv"
+        arxiv_dir.mkdir()
+        p_arxiv = arxiv_dir / "citing_preprint.pdf"
+        with fitz.open() as doc:
+            pg = doc.new_page()
+            pg.insert_text((60, 70), "Original Experimental Study on Yeast Heat Shock Proteins", fontsize=15)
+            pg.insert_text((60, 95), "Jane Doe", fontsize=11)
+            pg.insert_text((60, 140), "Earlier methods were proposed in arXiv:2301.12345.", fontsize=11)
+            doc.save(p_arxiv)
+        fake_oa = (
+            {
+                "title": "Unrelated Machine Learning Preprint Mentioned In Passing",
+                "authors": [{"family": "WrongAuthor", "given": "X."}],
+                "first_author_family": "WrongAuthor",
+                "year": "2023",
+                "journal": "arXiv",
+                "volume": "",
+                "issue": "",
+                "pages": "",
+                "doi": "10.48550/arXiv.2301.12345",
+                "abstract": "",
+                "is_retracted": False,
+            },
+            "openalex_arxiv",
+            "direct_no_proxy",
+        )
+        cat_arxiv = self.root / "catalog_arxiv.json"
+        args_arxiv = index_pdf_folder.build_parser().parse_args([
+            "index", "--pdf-dir", str(arxiv_dir), "--work-dir", str(self.root / "idxwork_arxiv"),
+            "--output", str(cat_arxiv), "--enrich-missing-metadata",
+        ])
+        from unittest.mock import patch
+        with patch.object(index_pdf_folder, "enrich_metadata", return_value=fake_oa):
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(index_pdf_folder.cmd_index(args_arxiv), 0)
+        item_ax = json.loads(cat_arxiv.read_text(encoding="utf-8"))["items"][0]
+        self.assertIn("not corroborated", item_ax["identity_review"])
+        self.assertIn("Yeast Heat Shock Proteins", item_ax["title"])
+        self.assertEqual(item_ax["first_author_family"], "Doe")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import tempfile
@@ -25,7 +26,46 @@ from _common import check_work_path, write_json_atomic
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 W = f"{{{W_NS}}}"
-TERMINAL_PUNCT = set(".,;:!?。，；：！？")
+ASCII_TERMINAL_PUNCT = set(".,;:!?")
+CJK_TERMINAL_PUNCT = set("。，；：！？")
+TERMINAL_PUNCT = ASCII_TERMINAL_PUNCT | CJK_TERMINAL_PUNCT
+# NUL cannot occur in XML text. It separates spans that cannot share an anchor.
+ANCHOR_BOUNDARY = "\x00"
+_NORM_1TO1_TRANS = str.maketrans({
+    "‘": "'", "’": "'", "‚": "'",
+    "“": '"', "”": '"', "„": '"',
+    "–": "-", "—": "-", "−": "-",
+    "\u00a0": " ",
+})
+_STATIC_BIB_RE = re.compile(
+    r"^(?:(?:\d+(?:\.\d+)*|[一二三四五六七八九十]+)\s*[.、]?\s*)?(?:references|bibliography|literature cited|works cited|参考文献|文献)\s*:?$",
+    re.IGNORECASE,
+)
+_POST_BIB_HEADING_RE = re.compile(
+    r"^(?:(?:\d+(?:\.\d+)*|[A-Z]|[一二三四五六七八九十]+)\s*[.、]?\s*)?(?:appendix|supplementary(?:\s+(?:materials|methods|information|notes|data))?|supporting information|acknowledgements?|个人简历|附\s*录|补充材料|致\s*谢)\b",
+    re.IGNORECASE,
+)
+_SKIP_PARA_CHILDREN = {
+    W + "pPr", W + "bookmarkStart", W + "bookmarkEnd", W + "proofErr",
+    W + "commentRangeStart", W + "commentRangeEnd", W + "permStart", W + "permEnd",
+}
+
+
+def _norm_1to1(value: str) -> str:
+    """Length-preserving typography normalization for curly quotes, dashes, and NBSP."""
+    out = value.translate(_NORM_1TO1_TRANS)
+    if len(out) != len(value):
+        raise AssertionError("_norm_1to1 changed string length")
+    return out
+
+
+def _is_cjk_char(ch: str) -> bool:
+    return (
+        "\u4e00" <= ch <= "\u9fff"
+        or "\u3400" <= ch <= "\u4dbf"
+        or "\u3000" <= ch <= "\u303f"
+        or "\uff00" <= ch <= "\uffef"
+    )
 
 
 def sha256_file(path: Path) -> str:
@@ -56,7 +96,7 @@ def build_docx_from_text(text_file: Path, title: str | None, out_path: Path) -> 
     doc = Document()
     if title:
         doc.add_heading(title.strip(), level=1)
-    blocks = [b.strip() for b in re.split(r"\r?\n\s*\r?\n", raw) if b.strip()]
+    blocks = [b.strip() for b in re.split(r"\r?\n(?:[ \t]*\r?\n)+", raw) if b.strip()]
     for block in blocks:
         # Preserve single-paragraph continuity while trimming line wraps
         para_text = " ".join(line.strip() for line in block.splitlines() if line.strip())
@@ -64,40 +104,41 @@ def build_docx_from_text(text_file: Path, title: str | None, out_path: Path) -> 
     doc.save(str(out_path))
 
 
-def iter_eligible_t_nodes(
-    node: etree._Element, field_state: dict[str, int]
-) -> list[etree._Element]:
-    """Collect <w:t> elements outside <w:del> subtrees and outside existing Word fields."""
-    if node.tag == W + "del":
-        return []
-    if node.tag == W + "fldChar":
-        kind = node.get(W + "fldCharType")
-        if kind == "begin":
-            field_state["depth"] += 1
-        elif kind == "end" and field_state["depth"] > 0:
-            field_state["depth"] -= 1
-        return []
-    collected: list[etree._Element] = []
-    if node.tag == W + "t" and field_state["depth"] == 0:
-        collected.append(node)
-    for child in node:
-        collected.extend(iter_eligible_t_nodes(child, field_state))
-    return collected
-
-
 def paragraph_text_map(
-    p_elem: etree._Element,
+    p_elem: etree._Element, field_state: dict[str, int],
 ) -> tuple[str, list[tuple[etree._Element, int, int]]]:
-    t_nodes = iter_eligible_t_nodes(p_elem, {"depth": 0})
     parts: list[str] = []
     spans: list[tuple[etree._Element, int, int]] = []
     cursor = 0
-    for t_node in t_nodes:
-        txt = t_node.text or ""
-        parts.append(txt)
-        start = cursor
-        cursor += len(txt)
-        spans.append((t_node, start, cursor))
+    # The native preparation audit also reads only direct runs in each paragraph.
+    for run in p_elem:
+        if run.tag in _SKIP_PARA_CHILDREN:
+            continue
+        if run.tag != W + "r":
+            parts.append(ANCHOR_BOUNDARY)
+            cursor += 1
+            continue
+        for child in run:
+            if child.tag in {W + "rPr", W + "commentReference"}:
+                continue
+            if child.tag == W + "t" and not field_state["depth"]:
+                txt = child.text or ""
+                parts.append(txt)
+                spans.append((child, cursor, cursor + len(txt)))
+                cursor += len(txt)
+                continue
+            if child.tag == W + "noBreakHyphen" and not field_state["depth"]:
+                parts.append("-")
+                cursor += 1
+                continue
+            if child.tag == W + "fldChar":
+                kind = child.get(W + "fldCharType")
+                if kind == "begin":
+                    field_state["depth"] += 1
+                elif kind == "end" and field_state["depth"]:
+                    field_state["depth"] -= 1
+            parts.append(ANCHOR_BOUNDARY)
+            cursor += 1
     return "".join(parts), spans
 
 
@@ -116,72 +157,119 @@ def locate_span(
     raise RuntimeError(f"Could not map character offset {char_offset} to any <w:t> run")
 
 
-def inject_into_docx(
-    source_docx: Path,
-    out_docx: Path,
-    plan: dict[str, object],
-    resolved: dict[str, object],
-) -> dict[str, object]:
-    by_pdf_id: dict[str, dict[str, object]] = dict(resolved.get("by_pdf_id") or {})
-    insertions = list(plan.get("insertions") or [])
-    if not insertions:
-        raise ValueError("citation_plan.json contains zero insertions")
-
+def read_manuscript(source_docx):
     with zipfile.ZipFile(source_docx, "r") as src_zip:
         doc_bytes = src_zip.read("word/document.xml")
 
-    parser = etree.XMLParser(remove_blank_text=False)
+    parser = etree.XMLParser(remove_blank_text=False, resolve_entities=False, no_network=True)
     root = etree.fromstring(doc_bytes, parser=parser)
-    paragraphs = root.findall(".//" + W + "p")
-    para_maps = [paragraph_text_map(p) for p in paragraphs]
+    body = root.find(W + "body")
+    paragraphs = root.xpath(".//w:body//w:p[not(ancestor::w:txbxContent or ancestor::w:del or ancestor::w:ins or ancestor::w:moveFrom or ancestor::w:moveTo or ancestor::w:sdt or ancestor::w:fldSimple)]",
+                            namespaces={"w": W_NS})
+    field_state = {"depth": 0}
+    para_maps: list[tuple[str, list[tuple[etree._Element, int, int]]]] = []
+    in_static_bib = False
+    for p in paragraphs:
+        mapped = paragraph_text_map(p, field_state)
+        visible = mapped[0].replace(ANCHOR_BOUNDARY, "").strip()
+        is_top_level = p.getparent() is body
+        if not in_static_bib:
+            if is_top_level and len(visible) < 40 and _STATIC_BIB_RE.match(visible):
+                in_static_bib = True
+        elif is_top_level and len(visible) < 80 and _POST_BIB_HEADING_RE.match(visible):
+            in_static_bib = False
+        para_maps.append(("", []) if in_static_bib else mapped)
 
-    resolved_ops: list[dict[str, object]] = []
+    return root, para_maps
+
+
+def _resolve_position_offset(
+    anchor_text: str,
+    end_off: int,
+    pos_mode: str,
+    style: str | None,
+) -> tuple[int, str]:
+    mode = pos_mode.strip()
+    if mode not in {"auto", "before_terminal_punct", "after_anchor"}:
+        raise ValueError(f"Unsupported position mode {pos_mode!r}")
+    effective_mode = mode
+    is_nature = str(style or "").strip().casefold().startswith("nature")
+    if mode == "auto":
+        if is_nature:
+            if anchor_text[-1] in CJK_TERMINAL_PUNCT:
+                effective_mode = "before_terminal_punct"
+            elif anchor_text[-1] in ASCII_TERMINAL_PUNCT:
+                effective_mode = "after_anchor"
+            else:
+                effective_mode = "after_anchor"
+        else:
+            effective_mode = "before_terminal_punct"
+    if effective_mode == "before_terminal_punct" and anchor_text[-1] in TERMINAL_PUNCT:
+        return end_off - 1, effective_mode
+    return end_off, effective_mode
+
+
+def locate_placements(para_maps, insertions, style: str | None = None):
+    placements = []
     used_positions: set[tuple[int, int]] = set()
-    used_pdf_ids: set[str] = set()
+    labels = set()
+
+    norm_paras = [_norm_1to1(p_text) for p_text, _ in para_maps]
 
     for idx, item in enumerate(insertions):
         ins_id = str(item.get("insertion_id") or f"C{idx + 1:02d}")
+        if ins_id in labels:
+            raise ValueError(f"Use a distinct insertion_id for each placement: {ins_id}")
+        labels.add(ins_id)
         anchor_text = str(item.get("anchor_text") or "")
         if not anchor_text:
             raise ValueError(f"Insertion {ins_id} has empty anchor_text")
+        if ANCHOR_BOUNDARY in anchor_text:
+            raise ValueError(f"Insertion {ins_id} contains an invalid character")
         pdf_ids = [str(pid) for pid in (item.get("pdf_ids") or [])]
         if not pdf_ids:
             raise ValueError(f"Insertion {ins_id} has empty pdf_ids")
-        missing = [pid for pid in pdf_ids if pid not in by_pdf_id]
-        if missing:
-            raise KeyError(f"Insertion {ins_id} references unresolved pdf_ids: {missing}")
 
+        norm_anchor = _norm_1to1(anchor_text)
         matches: list[tuple[int, int, int]] = []
-        for p_idx, (p_text, _) in enumerate(para_maps):
+        for p_idx, p_norm in enumerate(norm_paras):
             search_from = 0
             while True:
-                pos = p_text.find(anchor_text, search_from)
+                pos = p_norm.find(norm_anchor, search_from)
                 if pos == -1:
                     break
-                matches.append((p_idx, pos, pos + len(anchor_text)))
+                matches.append((p_idx, pos, pos + len(norm_anchor)))
                 search_from = pos + 1
 
         if not matches:
-            raise ValueError(f"Anchor text not found for {ins_id}: {anchor_text!r}")
+            bridged = any(norm_anchor in p_norm.replace(ANCHOR_BOUNDARY, "") for p_norm in norm_paras if p_norm)
+            hint = (
+                " (the phrase crosses a hyperlink, tracked change, or content-control boundary; shorten anchor_text or accept revisions)"
+                if bridged
+                else ""
+            )
+            raise ValueError(f"Anchor text not found for {ins_id}: {anchor_text!r}{hint}")
         if "occurrence" not in item and len(matches) > 1:
             raise ValueError(
                 f"Ambiguous anchor text ({len(matches)} matches) for {ins_id}; "
                 f"specify 'occurrence': {anchor_text!r}"
             )
-        occ = int(item.get("occurrence", 1))
+        occ = item.get("occurrence", 1)
+        if isinstance(occ, str) and re.fullmatch(r"[0-9]+", occ):
+            occ = int(occ)
+        if type(occ) is not int:
+            raise ValueError(f"Occurrence must be an integer for {ins_id}")
         if occ < 1 or occ > len(matches):
-            raise IndexError(
+            raise ValueError(
                 f"Occurrence {occ} out of range (1..{len(matches)}) for {ins_id}"
             )
 
-        p_idx, _, end_off = matches[occ - 1]
-        pos_mode = str(item.get("position", "before_terminal_punct"))
-        if pos_mode == "before_terminal_punct" and anchor_text[-1] in TERMINAL_PUNCT:
-            insert_off = end_off - 1
-        elif pos_mode in {"before_terminal_punct", "after_anchor"}:
-            insert_off = end_off
-        else:
-            raise ValueError(f"Unsupported position mode {pos_mode!r} in {ins_id}")
+        p_idx, start_off, end_off = matches[occ - 1]
+        raw_mode = str(item.get("position") or ("auto" if style is not None else "before_terminal_punct"))
+        try:
+            insert_off, resolved_mode = _resolve_position_offset(anchor_text, end_off, raw_mode, style)
+        except ValueError as exc:
+            raise ValueError(f"{exc} in {ins_id}") from exc
 
         if (p_idx, insert_off) in used_positions:
             raise ValueError(
@@ -189,28 +277,51 @@ def inject_into_docx(
                 "combine their pdf_ids into one insertion."
             )
         used_positions.add((p_idx, insert_off))
-        used_pdf_ids.update(pdf_ids)
-
-        tokens = list(dict.fromkeys(str(by_pdf_id[pid]["citation_token"]) for pid in pdf_ids))
-        core = "{" + "; ".join(tokens) + "}"
-        p_text = para_maps[p_idx][0]
-        use_space = plan.get("space_before_citation", str(plan.get("style")).casefold() != "nature")
-        need_space = use_space and insert_off > 0 and not p_text[insert_off - 1].isspace()
-        placeholder = (" " + core) if need_space else core
-
-        resolved_ops.append(
+        p_raw = para_maps[p_idx][0]
+        local_rel = insert_off - start_off
+        matched_slice = p_raw[start_off:end_off].replace(ANCHOR_BOUNDARY, "")
+        inline_preview = f"{matched_slice[:max(0, local_rel)]}[+Cite]{matched_slice[max(0, local_rel):]}"
+        placements.append(
             {
                 "insertion_id": ins_id,
                 "paragraph_index": p_idx,
                 "char_offset": insert_off,
                 "anchor_text": anchor_text,
                 "occurrence": occ,
-                "position": pos_mode,
+                "position": resolved_mode,
+                "inline_preview": inline_preview,
                 "pdf_ids": pdf_ids,
-                "placeholder": placeholder,
-                "record_ids": [int(by_pdf_id[pid]["record_id"]) for pid in pdf_ids],
             }
         )
+    return placements
+
+
+def inject_into_docx(
+    source_docx: Path,
+    out_docx: Path,
+    plan: dict[str, object],
+    resolved: dict[str, object],
+) -> dict[str, object]:
+    insertions = list(plan.get("insertions") or [])
+    if not insertions:
+        raise ValueError("citation_plan.json contains zero insertions")
+    style = plan.get("style")
+    root, para_maps = read_manuscript(source_docx)
+    resolved_ops = locate_placements(para_maps, insertions, style=style)
+    by_pdf_id = resolved.get("by_pdf_id") or {}
+    use_space = plan.get("space_before_citation", not str(style or "").strip().casefold().startswith("nature"))
+    for op in resolved_ops:
+        pdf_ids = op["pdf_ids"]
+        missing = [pid for pid in pdf_ids if pid not in by_pdf_id]
+        if missing:
+            raise KeyError(f"Insertion {op['insertion_id']} references unresolved pdf_ids: {missing}")
+        tokens = dict.fromkeys(str(by_pdf_id[pid]["citation_token"]) for pid in pdf_ids)
+        offset = op["char_offset"]
+        paragraph = para_maps[op["paragraph_index"]][0]
+        prev_ch = paragraph[offset - 1] if offset > 0 else ""
+        space = " " if use_space and prev_ch and not prev_ch.isspace() and not _is_cjk_char(prev_ch) else ""
+        op["placeholder"] = space + "{" + "; ".join(tokens) + "}"
+        op["record_ids"] = [int(by_pdf_id[pid]["record_id"]) for pid in pdf_ids]
 
     # Apply in reverse document order so earlier offsets stay invariant
     for op in sorted(
@@ -230,14 +341,32 @@ def inject_into_docx(
         root, xml_declaration=True, encoding="UTF-8", standalone="yes"
     )
     out_docx.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(source_docx, "r") as src_zip, zipfile.ZipFile(
-        out_docx, "x", compression=zipfile.ZIP_DEFLATED
-    ) as dst_zip:
-        for info in src_zip.infolist():
-            data = new_doc_bytes if info.filename == "word/document.xml" else src_zip.read(info.filename)
-            new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
-            new_info.compress_type = zipfile.ZIP_DEFLATED
-            dst_zip.writestr(new_info, data)
+    if out_docx.exists():
+        raise FileExistsError(f"Refusing to overwrite output DOCX: {out_docx}")
+    tmp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=out_docx.parent, prefix=f".{out_docx.name}.", suffix=".tmp", delete=False
+        ) as handle:
+            tmp_path = handle.name
+        with zipfile.ZipFile(source_docx, "r") as src_zip, zipfile.ZipFile(
+            tmp_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as dst_zip:
+            for info in src_zip.infolist():
+                data = new_doc_bytes if info.filename == "word/document.xml" else src_zip.read(info.filename)
+                new_info = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+                new_info.compress_type = zipfile.ZIP_DEFLATED
+                dst_zip.writestr(new_info, data)
+        if os.name == "nt":
+            os.rename(tmp_path, out_docx)
+        else:
+            os.link(tmp_path, out_docx)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
     existing_main, existing_ids = _audit_existing_cwyw(source_docx)
     new_ids = {rid for op in resolved_ops for rid in op["record_ids"]}

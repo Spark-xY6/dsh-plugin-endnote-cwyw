@@ -29,11 +29,14 @@ from _common import (
     check_work_path,
     first_author_family,
     list_process_pids,
+    normalize_author_family,
     normalize_doi,
     normalize_title,
     parse_endnote_authors,
+    parse_pdf_meta_authors,
     read_endnote_active_records,
     read_library_id,
+    split_name_with_particles,
     tokenize_scientific,
     write_json_atomic,
 )
@@ -118,37 +121,43 @@ def is_usable_title(candidate: str, pdf_stem: str) -> bool:
         return False
     if cleaned.casefold().endswith((".pdf", ".doc", ".docx")):
         return False
+    if re.search(r"\b[a-z]{2,10}\.\d{4,}|\.\.", cleaned, re.IGNORECASE):
+        return False
+    cjk_count = len(re.findall(r"[\u4e00-\u9fff]", cleaned))
+    alpha_words = [w for w in cleaned.split() if re.fullmatch(r"[A-Za-z][A-Za-z\-]{1,}", w)]
+    if cjk_count < 4 and len(alpha_words) < 3:
+        return False
     if normalize_title(cleaned) == normalize_title(pdf_stem) and len(cleaned.split()) < 4:
         return False
     return True
 
 
 def heuristic_title_from_page1(page: fitz.Page) -> str:
-    """Extract likely article title using largest body-width font spans on page 1."""
+    """Extract likely article title using consecutive largest-font lines on page 1."""
     data = page.get_text("dict")
     candidates: list[tuple[float, float, str]] = []
     for block in data.get("blocks", []):
         if block.get("type") != 0:
             continue
-        lines_text: list[str] = []
-        sizes: list[float] = []
+        sized_lines: list[tuple[float, float, str]] = []
         for line in block.get("lines", []):
             line_chars: list[str] = []
+            line_sizes: list[float] = []
             for span in line.get("spans", []):
                 txt = str(span.get("text", "")).strip()
                 if txt:
                     line_chars.append(txt)
-                    sizes.append(float(span.get("size", 0.0)))
+                    line_sizes.append(float(span.get("size", 0.0)))
             joined = " ".join(line_chars).strip()
-            if joined:
-                lines_text.append(joined)
-        full_text = " ".join(lines_text).strip()
-        if not sizes or len(full_text) < 15:
+            if joined and line_sizes:
+                sized_lines.append((sum(line_sizes) / len(line_sizes), float(line.get("bbox", [0, 0, 0, 0])[1]), joined))
+        if not sized_lines:
             continue
-        avg_size = sum(sizes) / len(sizes)
-        # Skip tiny headers or single giant banner words
-        if avg_size >= 11.5 and len(full_text.split()) >= 4:
-            candidates.append((avg_size, -float(block.get("bbox", [0, 0, 0, 0])[1]), full_text))
+        top_size = max(sz for sz, _, _ in sized_lines)
+        title_lines = [txt for sz, _, txt in sized_lines if sz >= top_size * 0.88]
+        full_text = " ".join(title_lines).strip()
+        if top_size >= 11.5 and len(full_text) >= 15 and len(full_text.split()) >= 4:
+            candidates.append((top_size, -sized_lines[0][1], full_text))
     if not candidates:
         return ""
     candidates.sort(reverse=True)
@@ -170,13 +179,102 @@ def heuristic_year_from_pages(pages_text: list[str]) -> str:
     return ""
 
 
-def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str, object]:
+def order_page_blocks(blocks: list[tuple], page_width: float) -> list[tuple]:
+    """Order multi-column text blocks in human reading order (top span -> left column -> right column -> bottom)."""
+    text_blocks = [b for b in blocks if len(b) >= 7 and b[6] == 0]
+    if len(text_blocks) < 4 or page_width <= 0:
+        return sorted(text_blocks, key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+    mid_x = 0.5 * page_width
+    spanning = [
+        b for b in text_blocks
+        if (float(b[2]) - float(b[0])) > 0.58 * page_width
+        or (float(b[0]) < 0.35 * page_width and float(b[2]) > 0.65 * page_width)
+    ]
+    cols = [b for b in text_blocks if b not in spanning]
+    left = [b for b in cols if 0.5 * (float(b[0]) + float(b[2])) < mid_x]
+    right = [b for b in cols if 0.5 * (float(b[0]) + float(b[2])) >= mid_x]
+    if len(left) >= 2 and len(right) >= 2:
+        col_top = min(float(b[1]) for b in left + right)
+        top_span = sorted([b for b in spanning if float(b[1]) <= col_top], key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+        bottom_span = sorted([b for b in spanning if float(b[1]) > col_top], key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+        left_sorted = sorted(left, key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+        right_sorted = sorted(right, key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+        return top_span + left_sorted + right_sorted + bottom_span
+    return sorted(text_blocks, key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)))
+
+
+def _extract_offline_authors(
+    meta: dict[str, object],
+    xmp_xml: str,
+    page1_text: str,
+    title: str,
+) -> list[dict[str, str]]:
+    """Extract authors offline via PDF Info, XMP dc:creator, or page-1 header byline."""
+    from_meta = parse_pdf_meta_authors(meta.get("author") or "")
+    if from_meta:
+        return from_meta
+
+    if xmp_xml:
+        creator_blocks = re.findall(r"<dc:creator[^>]*>(.*?)</dc:creator>", xmp_xml, re.IGNORECASE | re.DOTALL)
+        raw_xmp: list[str] = []
+        for blk in creator_blocks:
+            items = re.findall(r"<rdf:li[^>]*>(.*?)</rdf:li>", blk, re.IGNORECASE | re.DOTALL)
+            raw_xmp.extend(strip_xml_tags(i) for i in (items or [blk]) if strip_xml_tags(i))
+        if not raw_xmp:
+            pdf_auth = re.findall(r"<pdf:Author[^>]*>(.*?)</pdf:Author>", xmp_xml, re.IGNORECASE | re.DOTALL)
+            raw_xmp.extend(strip_xml_tags(a) for a in pdf_auth if strip_xml_tags(a))
+        if raw_xmp:
+            parsed_xmp = (
+                parse_endnote_authors("\n".join(raw_xmp))
+                if len(raw_xmp) > 1
+                else parse_pdf_meta_authors(raw_xmp[0])
+            )
+            if parsed_xmp:
+                return parsed_xmp
+
+    if page1_text:
+        norm_title = normalize_title(title)
+        affil_re = re.compile(
+            r"@|https?://|\b(?:doi|university|institute|department|school|laboratory|college|center|centre|hospital|academy|accepted|received|published|abstract|summary|keywords)\b|\d{4,}",
+            re.IGNORECASE,
+        )
+        past_title = not bool(norm_title)
+        for line in [ln.strip() for ln in page1_text.splitlines()[:25] if ln.strip()]:
+            if re.fullmatch(r"(?:abstract|summary|introduction)", line, re.IGNORECASE):
+                break
+            if not past_title and norm_title and normalize_title(line) and (
+                normalize_title(line) in norm_title or norm_title in normalize_title(line)
+            ):
+                past_title = True
+                continue
+            if affil_re.search(line) or len(line) > 140 or ("." in line and not re.search(r"\b[A-Z]\.", line)):
+                continue
+            cleaned = re.sub(r"(?<=[A-Za-z])[0-9*†‡§]+(?:,[0-9*†‡§]+)*", "", line)
+            chunks = [c.strip() for c in re.split(r"\s*,\s*|\s*;\s*|\s+and\s+", cleaned) if c.strip()]
+            particles = {"van", "von", "de", "del", "della", "der", "den", "la", "le", "du", "di", "da", "dos"}
+            name_chunks = [
+                c for c in chunks
+                if 2 <= len(c.split()) <= 5
+                and re.match(r"^[A-Z][\w'.-]*$", c.split()[0])
+                and re.match(r"^[A-Z][\w'.-]*$", c.split()[-1])
+                and all(re.match(r"^[A-Z][\w'.-]*$", w) or w.casefold() in particles for w in c.split())
+            ]
+            if name_chunks and (past_title or len(name_chunks) >= 2):
+                byline_authors = parse_endnote_authors("\n".join(name_chunks))
+                if byline_authors:
+                    return byline_authors
+    return []
+
+
+def extract_pdf_record(
+    pdf_path: Path, pdf_root: Path, pdf_id: str, max_pages_limit: int = 30
+) -> dict[str, object]:
     """Parse multi-layer PDF identifiers, heuristic title/year, and overlapping non-reference chunks."""
     with fitz.open(pdf_path) as doc:
         meta = dict(doc.metadata or {})
         xmp_xml = str(doc.get_xml_metadata() or "")
         total_pages = len(doc)
-        max_pages = min(total_pages, 12)
+        max_pages = min(total_pages, max(1, int(max_pages_limit)))
         pages_text: list[str] = []
         raw_blocks: list[tuple[int, str]] = []
         stop_body = False
@@ -185,10 +283,7 @@ def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str,
             pages_text.append(page.get_text("text"))
             if stop_body:
                 continue
-            blocks = sorted(
-                (b for b in page.get_text("blocks") if len(b) >= 7 and b[6] == 0),
-                key=lambda b: (round(float(b[1]), 1), round(float(b[0]), 1)),
-            )
+            blocks = order_page_blocks(page.get_text("blocks"), float(page.rect.width))
             for block in blocks:
                 raw_block = str(block[4]).strip()
                 if not raw_block:
@@ -205,7 +300,7 @@ def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str,
         passages = build_overlapping_chunks(raw_blocks)
 
         # Multi-layer identifier extraction (pdf2doi order):
-        # Prefer embedded identification and the article's first-page imprint.
+        # Prefer embedded identification and page 1/2 imprints.
         meta_blob = " ".join(
             str(meta.get(k, "") or "") for k in ("subject", "keywords", "title")
         )
@@ -219,10 +314,12 @@ def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str,
                 identifier_layer = "xmp_xml"
 
         if not doi and pages_text:
-            imprint = re.split(r"(?im)^\s*(?:references|bibliography)\s*$", pages_text[0], maxsplit=1)[0]
-            doi = extract_doi_from_text(imprint)
-            if doi:
-                identifier_layer = "page_text"
+            for p_idx in range(min(2, len(pages_text))):
+                imprint = re.split(r"(?im)^\s*(?:references|bibliography)\s*$", pages_text[p_idx], maxsplit=1)[0]
+                doi = extract_doi_from_text(imprint)
+                if doi:
+                    identifier_layer = "page_text"
+                    break
 
         arxiv_blob = "\n".join(
             [meta_blob, xmp_xml, pages_text[0] if pages_text else ""]
@@ -240,6 +337,11 @@ def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str,
             title = ""
 
         year = heuristic_year_from_pages(pages_text)
+        offline_authors = _extract_offline_authors(
+            meta, xmp_xml, pages_text[0] if pages_text else "", title
+        )
+        total_text_chars = sum(len(" ".join(t.split())) for t in pages_text)
+        needs_ocr = bool(total_pages > 0 and total_text_chars < 80)
         abstract_guess = ""
         for p in passages[:6]:
             low = str(p["text"]).casefold()
@@ -261,7 +363,9 @@ def extract_pdf_record(pdf_path: Path, pdf_root: Path, pdf_id: str) -> dict[str,
         "heuristic_title": title,
         "heuristic_year": year,
         "first_page_imprint": " ".join(pages_text[0].split())[:600] if pages_text else "",
-        "first_author_family": first_author_family(parse_endnote_authors(meta.get("author") or "")),
+        "authors": offline_authors,
+        "first_author_family": first_author_family(offline_authors),
+        "needs_ocr": needs_ocr,
         "heuristic_abstract": abstract_guess,
         "passages": passages[:150],
     }
@@ -368,11 +472,7 @@ def fetch_openalex_work(
             fam, giv = display_name.split(",", 1)
             authors.append({"family": fam.strip(), "given": giv.strip()})
         else:
-            parts = display_name.split()
-            if len(parts) >= 2:
-                authors.append({"family": parts[-1], "given": " ".join(parts[:-1])})
-            else:
-                authors.append({"family": display_name, "given": ""})
+            authors.append(split_name_with_particles(display_name))
 
     biblio = payload.get("biblio") or {}
     first_p = str(biblio.get("first_page") or "").strip()
@@ -547,8 +647,8 @@ def corroborates_pdf(parsed, record):
     title = normalize_title(record.get("title"))
     pdf_title = normalize_title(parsed.get("heuristic_title"))
     imprint = normalize_title(parsed.get("first_page_imprint"))
-    author = normalize_title(parsed.get("first_author_family"))
-    record_author = normalize_title(record.get("first_author_family"))
+    author = normalize_author_family(parsed.get("first_author_family"))
+    record_author = normalize_author_family(record.get("first_author_family"))
     if author and record_author and author != record_author:
         return False
     years = (str(parsed.get("heuristic_year") or ""), str(record.get("year") or ""))
@@ -600,7 +700,9 @@ def cmd_index(args: argparse.Namespace) -> int:
 
     pdf_files = sorted(pdf_dir.rglob("*.pdf"), key=lambda p: p.relative_to(pdf_dir).as_posix())
     items: list[dict[str, object]] = []
+    skipped_pdfs: list[dict[str, str]] = []
     cache_hits = 0
+    max_pages = max(1, int(getattr(args, "max_pages", 30)))
 
     for idx, pdf_path in enumerate(pdf_files, start=1):
         pdf_id = f"P{idx:03d}"
@@ -611,14 +713,18 @@ def cmd_index(args: argparse.Namespace) -> int:
             for block in iter(lambda: handle.read(1024 * 1024), b""):
                 digest.update(block)
         sha256 = digest.hexdigest().upper()
-        cache_key = f"v3|{rel_posix}|{sha256}"
+        cache_key = f"v4|p{max_pages}|{rel_posix}|{sha256}"
         if cache_key in cache:
             parsed = dict(cache[cache_key])
             parsed["pdf_id"] = pdf_id
             parsed["pdf_path"] = str(pdf_path.resolve())
             cache_hits += 1
         else:
-            parsed = extract_pdf_record(pdf_path, pdf_dir, pdf_id)
+            try:
+                parsed = extract_pdf_record(pdf_path, pdf_dir, pdf_id, max_pages_limit=max_pages)
+            except Exception as exc:
+                skipped_pdfs.append({"pdf_id": pdf_id, "relative_path": rel_posix, "error": str(exc)})
+                continue
             cache[cache_key] = parsed
         if pdf_path.stat().st_mtime_ns != stat.st_mtime_ns:
             raise RuntimeError(f"PDF changed during indexing: {pdf_path}")
@@ -649,6 +755,7 @@ def cmd_index(args: argparse.Namespace) -> int:
                     "network_mode": "not_needed",
                     "identifier_layer": parsed.get("identifier_layer", "none"),
                     "arxiv_id": parsed.get("arxiv_id", ""),
+                    "needs_ocr": bool(parsed.get("needs_ocr", False)),
                     "is_retracted": lib_title.strip().upper().startswith("RETRACTED:"),
                     "title": lib_title,
                     "authors": matched["authors"],
@@ -681,20 +788,24 @@ def cmd_index(args: argparse.Namespace) -> int:
                 identity_review = "PDF identification and online metadata disagree"
             elif source == "crossref_title" and not (
                 pdf_title == online_title
-                and normalize_title(parsed.get("first_author_family"))
-                and normalize_title(parsed.get("first_author_family")) == normalize_title(enriched.get("first_author_family"))
+                and normalize_author_family(parsed.get("first_author_family"))
+                and normalize_author_family(parsed.get("first_author_family")) == normalize_author_family(enriched.get("first_author_family"))
                 and parsed.get("heuristic_year") == enriched.get("year")
             ):
                 identity_review = "Title-search metadata lacks exact title, PDF author and year corroboration"
+            elif enriched and not pdf_doi and not corroborates_pdf(parsed, enriched):
+                identity_review = "Preprint/arXiv online metadata is not corroborated by this PDF"
             elif enriched:
                 try:
                     rid = record_index.match({**parsed, **enriched})
                     identity_review = ""
                 except IdentityReview as exc:
                     identity_review = str(exc)
-            authors = list(enriched.get("authors") or [])
-            abstract = str(enriched.get("abstract") or parsed.get("heuristic_abstract") or "")
-            new_title = str(enriched.get("title") or parsed["heuristic_title"])
+            trust_enriched = bool(enriched and not identity_review)
+            accepted_enriched = enriched if trust_enriched else {}
+            authors = list(accepted_enriched.get("authors") or parsed.get("authors") or [])
+            abstract = str(accepted_enriched.get("abstract") or parsed.get("heuristic_abstract") or "")
+            new_title = str(accepted_enriched.get("title") or parsed["heuristic_title"])
             items.append(
                 {
                     "pdf_id": pdf_id,
@@ -704,24 +815,29 @@ def cmd_index(args: argparse.Namespace) -> int:
                     "in_library": rid is not None and not identity_review,
                     "record_id": rid if not identity_review else None,
                     "identity_review": identity_review,
-                    "metadata_source": source,
+                    "metadata_source": source if trust_enriched else "pdf_heuristic",
                     "network_mode": network_mode,
                     "identifier_layer": parsed.get("identifier_layer", "none"),
                     "arxiv_id": parsed.get("arxiv_id", ""),
+                    "needs_ocr": bool(parsed.get("needs_ocr", False)),
                     "is_retracted": bool(
-                        enriched.get("is_retracted")
+                        accepted_enriched.get("is_retracted")
                         or new_title.strip().upper().startswith("RETRACTED:")
                     ),
                     "title": new_title,
                     "authors": authors,
-                    "first_author_family": enriched.get("first_author_family") or first_author_family(authors),
-                    "year": enriched.get("year") or parsed["heuristic_year"],
-                    "journal": enriched.get("journal") or "",
-                    "volume": enriched.get("volume") or "",
-                    "issue": enriched.get("issue") or "",
-                    "pages": enriched.get("pages") or "",
-                    "doi": enriched.get("doi") or parsed["doi"],
-                    "pmid": enriched.get("pmid") or "",
+                    "first_author_family": (
+                        accepted_enriched.get("first_author_family")
+                        or first_author_family(authors)
+                        or parsed.get("first_author_family", "")
+                    ),
+                    "year": accepted_enriched.get("year") or parsed["heuristic_year"],
+                    "journal": accepted_enriched.get("journal") or "",
+                    "volume": accepted_enriched.get("volume") or "",
+                    "issue": accepted_enriched.get("issue") or "",
+                    "pages": accepted_enriched.get("pages") or "",
+                    "doi": accepted_enriched.get("doi") or parsed["doi"],
+                    "pmid": accepted_enriched.get("pmid") or "",
                     "abstract": abstract,
                     "passages": parsed["passages"],
                 }
@@ -736,9 +852,12 @@ def cmd_index(args: argparse.Namespace) -> int:
         "library_id": library_id,
         "snapshot_path": snapshot_path_str,
         "library_active_count": len(records),
+        "max_pages": max_pages,
         "pdf_count": len(items),
         "in_library_count": sum(1 for item in items if item["in_library"]),
         "new_pdf_count": sum(1 for item in items if not item["in_library"]),
+        "skipped_pdf_count": len(skipped_pdfs),
+        "skipped_pdfs": skipped_pdfs,
         "cache_hits": cache_hits,
         "items": items,
     }
@@ -876,6 +995,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_idx.add_argument("--enl", type=Path)
     p_idx.add_argument("--work-dir", required=True, type=Path)
     p_idx.add_argument("--output", required=True, type=Path)
+    p_idx.add_argument("--max-pages", type=int, default=30, help="Maximum pages indexed per PDF (default: 30).")
     p_idx.add_argument("--enrich-missing-metadata", action="store_true")
     p_idx.add_argument("--overwrite", action="store_true")
 

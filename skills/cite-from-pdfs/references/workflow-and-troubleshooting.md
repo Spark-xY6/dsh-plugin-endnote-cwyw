@@ -38,6 +38,8 @@ Run the formatter directly in the interactive Windows desktop session. This avoi
 
 When a literal anchor repeats, specify a one-based `occurrence`. To append at the end of an anchor, use `after_anchor`. Preserve the source EndNote style by omitting `style` if the source defines one. For numeric superscript output, use `--require-superscript` when applicable. `space_before_citation` defaults to true for the prepared Word document. References selected for the same anchor go in one group.
 
+Use a complete phrase in ordinary Word body or table text. A change of font or emphasis inside the phrase is supported. Tabs, line breaks, existing fields, hyperlinks, tracked revisions, text boxes and other wrapped content can interrupt a match. If a sentence spans one of these, use a unique adjacent phrase at the intended citation position and check the private preview. Add `--explain zh` or `--explain en` to the preview for sentences, locations, PDF pages, record decisions and conflicts in the local terminal. Save the detailed report and decide whether the sources support the proposed claims.
+
 Every newly placed PDF needs a `sources` entry. Page 1 is the first page of the file, including covers. Supply a short quotation from selectable page text. Preparation checks the actual PDF again, before starting an import. This check establishes where the words occur. The agent and reader judge whether those words support the claim. The review JSON contains bibliographic details; retain it with the private working files.
 
 ## Bibliographic identity

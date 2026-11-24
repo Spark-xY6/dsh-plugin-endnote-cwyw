@@ -55,6 +55,86 @@ class EndNoteWindowTests(unittest.TestCase):
         with self.assertRaises(windows.WindowInterference):
             self.target.require_exclusive((103, 104))
 
+    def test_only_cancel_on_verified_task_owned_promotion(self):
+        import win32gui
+        self.view[106] = (windows.PROMOTION_TITLE, "#32770", 101)
+        with (patch.object(windows, "_promotion_cancel", return_value=202),
+              patch.object(win32gui, "SendMessageTimeout", side_effect=lambda *args: self.view.pop(106)) as click):
+            self.target.require_exclusive()
+        click.assert_called_once_with(202, 0x00F5, 0, 0, 0x0002, 2000)
+
+    def test_announcement_controls_can_finish_painting_after_its_frame(self):
+        import win32gui
+        self.view[106] = (windows.PROMOTION_TITLE, "#32770", 101)
+        with (patch.object(windows, "_promotion_cancel", side_effect=[None, 202, 202]),
+              patch.object(windows.time, "sleep") as waited,
+              patch.object(win32gui, "SendMessageTimeout", side_effect=lambda *args: self.view.pop(106)) as click):
+            self.target.require_exclusive()
+        waited.assert_called_once()
+        click.assert_called_once_with(202, 0x00F5, 0, 0, 0x0002, 2000)
+
+    def test_startup_rechecks_delayed_windows_before_dispatch(self):
+        import win32gui
+        def late_popup(_):
+            self.view[106] = (windows.PROMOTION_TITLE, "#32770", 101)
+        with (patch.object(windows.time, "monotonic", side_effect=[0, .1, .2, .3, 2.6]),
+              patch.object(windows.time, "sleep", side_effect=late_popup),
+              patch.object(windows, "_promotion_cancel", return_value=202),
+              patch.object(win32gui, "SendMessageTimeout", side_effect=lambda *args: self.view.pop(106)) as click):
+            self.target.wait_for_startup(10)
+        click.assert_called_once_with(202, 0x00F5, 0, 0, 0x0002, 2000)
+
+    def test_only_previously_cancelled_hidden_owner_of_import_can_bridge(self):
+        self.view[108] = ("Import File", "#32770", 106)
+        with patch.object(windows, "_is_hidden_promotion", return_value=True) as matches:
+            with self.assertRaises(windows.WindowInterference):
+                self.target.require_exclusive((108,))
+            matches.assert_not_called()
+            self.target.cancelled_promotion = (106, 202)
+            self.target.require_exclusive((108,))
+            matches.assert_called_once_with(106, 202, 101, 41)
+            self.view[108] = ("Save Changes", "#32770", 106)
+            with self.assertRaises(windows.WindowInterference):
+                self.target.require_exclusive((108,))
+        self.view[108] = ("Import File", "#32770", 106)
+        with patch.object(windows, "_is_hidden_promotion", return_value=False):
+            with self.assertRaises(windows.WindowInterference):
+                self.target.require_exclusive((108,))
+
+    def test_promotion_requires_all_three_button_ids_and_embedded_page(self):
+        import win32gui
+        titles = {501: "Learn More...", 502: "Cancel", 503: "Ignore This"}
+        classes = {501: "Button", 502: "Button", 503: "Button", 504: "Internet Explorer_Server"}
+        with (patch.object(win32gui, "EnumChildWindows", side_effect=lambda h, f, p: [f(c, p) for c in classes]),
+              patch.object(win32gui, "GetClassName", side_effect=classes.get),
+              patch.object(win32gui, "GetParent", return_value=106),
+              patch.object(win32gui, "GetDlgCtrlID", side_effect={501: 3617, 502: 2, 503: 3619}.get),
+              patch.object(win32gui, "GetWindowText", side_effect=titles.get),
+              patch.object(win32gui, "IsWindowVisible", return_value=True),
+              patch.object(win32gui, "IsWindowEnabled", return_value=True)):
+            self.assertEqual(windows._promotion_cancel(106), 502)
+            titles[502] = "Discard changes"
+            self.assertIsNone(windows._promotion_cancel(106))
+            titles[502] = "Cancel"
+            del classes[504]
+            self.assertIsNone(windows._promotion_cancel(106))
+
+    def test_other_announcements_libraries_owners_or_wrong_database_are_untouched(self):
+        import win32gui
+        for wrong in ("title", "owner", "other library", "buttons", "database"):
+            with self.subTest(wrong=wrong):
+                self.view = self.main.copy()
+                self.view[106] = (windows.PROMOTION_TITLE if wrong != "title" else "Other Announcement",
+                                  "#32770", 101 if wrong != "owner" else 901)
+                if wrong == "other library":
+                    self.view[109] = ("foreign.enl", "Afx:Fixture", 0)
+                with (patch.object(windows, "_promotion_cancel", return_value=None if wrong == "buttons" else 202),
+                      patch.object(windows, "_holders", return_value=set() if wrong == "database" else {(41, 12345)}),
+                      patch.object(win32gui, "SendMessageTimeout") as click):
+                    with self.assertRaises(windows.WindowInterference):
+                        self.target.require_exclusive()
+                    click.assert_not_called()
+
     def test_foreign_library_appears_after_filter_before_committing(self):
         import win32gui
         self.target.wait_dialog = Mock(side_effect=[103, 104])
@@ -85,10 +165,25 @@ class EndNoteWindowTests(unittest.TestCase):
         close.assert_not_called()
         self.assertIn(102, self.view)
 
+    def test_selected_filename_can_arrive_after_picker_closes(self):
+        self.view[103] = ("Import File", "#32770", 101)
+        file = Path("fixture.enw").resolve()
+        with (patch.object(sync, "_control", return_value=1100),
+              patch.object(sync, "_read_text", side_effect=["", file.name]),
+              patch.object(sync.time, "sleep") as waited):
+            sync._wait_selected_import(self.target, 103, file, 2)
+        waited.assert_called_once()
+        with (patch.object(sync, "_control", return_value=1100),
+              patch.object(sync, "_read_text", return_value="different.enw"),
+              patch.object(sync.time, "sleep") as waited):
+            with self.assertRaises(windows.WindowInterference):
+                sync._wait_selected_import(self.target, 103, file, 2)
+        waited.assert_not_called()
+
     def test_import_progress_is_observed_to_completion_without_clicking(self):
         import win32gui
         progress = {**self.main, 106: ("Importing...", "#32770", 101)}
-        with (patch.object(windows, "_windows", side_effect=[progress, self.main]),
+        with (patch.object(windows, "_windows", side_effect=[self.main, progress, self.main]),
               patch.object(sync, "_children", return_value=[201, 202]),
               patch.object(win32gui, "IsWindowVisible", return_value=True),
               patch.object(win32gui, "GetClassName", side_effect=["Button", "msctls_progress32"]),
@@ -97,6 +192,15 @@ class EndNoteWindowTests(unittest.TestCase):
               patch.object(win32gui, "PostMessage") as message):
             self.target.wait_dismissed((), 103, 1, progress=sync._is_import_progress)
         message.assert_not_called()
+
+    def test_progress_with_hidden_advertisement_owner_still_checks_controls(self):
+        progress_view = {**self.main, 109: ("Importing...", "#32770", 106)}
+        self.target.cancelled_promotion = (106, 202)
+        with (patch.object(windows, "_windows", side_effect=[progress_view, self.main]),
+              patch.object(windows, "_is_hidden_promotion", return_value=True)):
+            signature = Mock(return_value=True)
+            self.target.wait_dismissed((), 103, 2, progress=signature)
+            signature.assert_called_once_with(109, "Importing...")
 
     def test_lookalike_progress_missing_real_progress_control_is_rejected(self):
         import win32gui
@@ -187,3 +291,29 @@ class EndNoteWindowTests(unittest.TestCase):
         popen.assert_called_once_with(["EndNote.exe", str(library)])
         native.assert_called_once_with(self.target, batch, 40.0)
         self.assertTrue(result["cleanly_closed"])
+
+    def test_matches_library_title_across_endnote_versions(self):
+        self.assertTrue(windows._matches_library_title("EndNote 21 - target.enl", "target.enl"))
+        self.assertTrue(windows._matches_library_title("EndNote X9 - target.enl", "target.enl"))
+        self.assertTrue(windows._matches_library_title("EndNote 20 - target", "target.enl"))
+        self.assertTrue(windows._matches_library_title("EndNote 2025 - target.enl", "target.enl"))
+        self.assertTrue(windows._matches_library_title("target.enl", "target.enl"))
+        self.assertFalse(windows._matches_library_title("EndNote 21 - other.enl", "target.enl"))
+        self.assertFalse(windows._matches_library_title("New Library", "target.enl"))
+
+    def test_enum_windows_sandbox_failure_raises_window_interference(self):
+        import win32gui
+        self.enum.stop()
+        with patch.object(win32gui, "EnumWindows", side_effect=OSError(126, "EnumWindows")):
+            with self.assertRaisesRegex(windows.WindowInterference, "interactive Windows desktop"):
+                windows._windows(1234)
+        with patch.object(win32gui, "EnumWindows", return_value=None):
+            with self.assertRaisesRegex(windows.WindowInterference, "No interactive desktop windows enumerated"):
+                windows._windows(1234)
+
+    def test_holders_resets_lasterror_234_probe_and_real_empty_desktop_windows(self):
+        import ctypes
+        import tempfile
+        with tempfile.NamedTemporaryFile() as tmp:
+            windows._holders(tmp.name)
+            self.assertEqual(ctypes.WinDLL("kernel32").GetLastError(), 0)

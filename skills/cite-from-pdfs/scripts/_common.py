@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 from contextlib import closing
 from ctypes import wintypes
+import html
 import os
 import re
 import shutil
@@ -31,15 +32,50 @@ def text(value: object) -> str:
     return str(value)
 
 
+_GREEK_TO_LATIN = str.maketrans({
+    "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta",
+    "ε": "epsilon", "ζ": "zeta", "η": "eta", "θ": "theta",
+    "ι": "iota", "κ": "kappa", "λ": "lambda", "μ": "mu", "µ": "mu",
+    "ν": "nu", "ξ": "xi", "ο": "omicron", "π": "pi",
+    "ρ": "rho", "σ": "sigma", "τ": "tau", "υ": "upsilon",
+    "φ": "phi", "χ": "chi", "ψ": "psi", "ω": "omega",
+})
+_SURNAME_PARTICLES = {"van", "von", "de", "del", "della", "der", "den", "la", "le", "du", "di", "da", "dos", "st."}
+_GEN_SUFFIX_RE = re.compile(r"(?:,?\s+(?:Jr\.?|Sr\.?|II|III|IV))$")
+_DOI_URL_RE = re.compile(r"https?://(?:dx\.)?doi\.org/[^\s\"'<>]+", re.IGNORECASE)
+_DOI_SEARCH_RE = re.compile(r"(?:doi:\s*)?(10\.\d{4,9}/[^\s\"'<>]+)", re.IGNORECASE)
+
+
 def normalize_doi(value: object) -> str:
-    raw = re.sub(r"^doi:\s*", "", text(value).strip(), flags=re.IGNORECASE)
-    if re.match(r"^https?://(?:dx\.)?doi\.org/", raw, flags=re.IGNORECASE):
-        raw = unquote(urlsplit(raw).path[1:])
-    return raw.casefold() if re.fullmatch(r"10\.\d{4,9}/[^\s\"]+", raw) else ""
+    raw = text(value).strip()
+    if not raw:
+        return ""
+    for line in re.split(r"[\r\n]+", raw):
+        chunk = line.strip()
+        if not chunk:
+            continue
+        url_match = _DOI_URL_RE.search(chunk)
+        candidate = ""
+        if url_match:
+            candidate = unquote(urlsplit(url_match.group(0)).path.lstrip("/"))
+        else:
+            match = _DOI_SEARCH_RE.search(chunk)
+            if match:
+                candidate = match.group(1)
+        if not candidate:
+            continue
+        candidate = candidate.rstrip(".,;]}\"'<>")
+        while candidate.endswith(")") and candidate.count(")") > candidate.count("("):
+            candidate = candidate[:-1]
+        if re.fullmatch(r"10\.\d{4,9}/[^\s\"<>]+", candidate):
+            return candidate.casefold()
+    return ""
 
 
 def normalize_title(value: object) -> str:
-    normalized = unicodedata.normalize("NFKD", text(value).casefold())
+    raw = html.unescape(text(value))
+    raw = re.sub(r"</?[A-Za-z][^>]*>", "", raw).casefold().translate(_GREEK_TO_LATIN)
+    normalized = unicodedata.normalize("NFKD", raw)
     return " ".join(
         "".join(
             char if char.isalnum() else " "
@@ -49,24 +85,65 @@ def normalize_title(value: object) -> str:
     )
 
 
+def split_name_with_particles(full_name: str) -> dict[str, str]:
+    cleaned = _GEN_SUFFIX_RE.sub("", full_name.strip()).strip()
+    parts = cleaned.split()
+    if len(parts) > 1:
+        idx = len(parts) - 1
+        while idx > 1 and parts[idx - 1].casefold() in _SURNAME_PARTICLES:
+            idx -= 1
+        return {"family": " ".join(parts[idx:]), "given": " ".join(parts[:idx])}
+    return {"family": cleaned, "given": ""}
+
+
+def normalize_author_family(family: object) -> str:
+    norm = normalize_title(family)
+    if not norm:
+        return ""
+    parts = norm.split()
+    while len(parts) > 1 and parts[0] in {"van", "von", "de", "del", "della", "der", "den", "la", "le", "du", "di", "da", "dos", "st"}:
+        parts = parts[1:]
+    return "".join(parts)
+
+
 def parse_endnote_authors(author_field: object) -> list[dict[str, str]]:
     """Parse EndNote's CR/LF-separated author lines into family/given dicts."""
     raw = text(author_field).replace("\r\n", "\n").replace("\r", "\n")
     authors: list[dict[str, str]] = []
     for line in raw.split("\n"):
-        cleaned = line.strip()
+        cleaned = _GEN_SUFFIX_RE.sub("", line.strip()).strip()
         if not cleaned:
             continue
         if "," in cleaned:
             family, given = cleaned.split(",", 1)
-            authors.append({"family": family.strip(), "given": given.strip()})
+            authors.append({"family": family.strip(), "given": _GEN_SUFFIX_RE.sub("", given.strip()).strip()})
         else:
-            parts = cleaned.split()
-            if len(parts) > 1:
-                authors.append({"family": parts[-1], "given": " ".join(parts[:-1])})
-            else:
-                authors.append({"family": cleaned, "given": ""})
+            authors.append(split_name_with_particles(cleaned))
     return authors
+
+
+def parse_pdf_meta_authors(author_field: object) -> list[dict[str, str]]:
+    """Parse single-line PDF Info /Author or XMP creator strings containing multiple authors."""
+    raw = text(author_field).replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not raw:
+        return []
+    if "\n" in raw or ";" in raw:
+        return parse_endnote_authors(raw.replace(";", "\n"))
+    if re.search(r"\s+(?:and|&)\s+", raw, re.IGNORECASE) and "," not in raw:
+        return parse_endnote_authors(re.sub(r"\s+(?:and|&)\s+", "\n", raw, flags=re.IGNORECASE))
+    if "," in raw:
+        segments = [s.strip() for s in raw.split(",") if s.strip()]
+        # Clean leading "and "/"& " on the final comma segment ("A. Smith, B. Jones, and C. Lee")
+        segments = [re.sub(r"^(?:and|&)\s+", "", s, flags=re.IGNORECASE).strip() for s in segments]
+        segments = [s for s in segments if s]
+        # Case 1: every segment has >= 2 words -> "Alice Smith, Bob Jones"
+        if len(segments) >= 2 and all(len(s.split()) >= 2 for s in segments):
+            return parse_endnote_authors("\n".join(segments))
+        # Case 2: paired "Smith, A., Jones, B." (even count >= 4, second part of each pair looks like initials/given)
+        if len(segments) >= 4 and len(segments) % 2 == 0 and all(len(segments[i].split()) <= 2 for i in range(0, len(segments), 2)):
+            paired = [f"{segments[i]}, {segments[i + 1]}" for i in range(0, len(segments), 2)]
+            return parse_endnote_authors("\n".join(paired))
+    return parse_endnote_authors(raw)
 
 
 def first_author_family(authors: list[dict[str, str]]) -> str:
