@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Editable EndNote Citations for Word",
-    "description": "Preview target sentences, verbatim PDF evidence pages, and library reuse/import diffs, then add live CWYW citations with a paired EndNote library.",
+    "description": "Preview sentence anchors and verbatim PDF page quotes first, then generate live editable Word EndNote CWYW citations on isolated copies.",
     "detail": "README.en.md"
   }
 }
