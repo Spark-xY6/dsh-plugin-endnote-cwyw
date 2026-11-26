@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "为 Word 增补可编辑的 EndNote 引文",
-    "description": "先预览每句插点与本地 PDF 原页摘录，再在独立副本库生成可随时增删刷新的 Word EndNote 动态引文（原稿原库只读）。",
+    "title": "EndNote 引文与跨库交接助手",
+    "description": "合作者异库交接不断链：按真实题录重绑错位记录号、随副本库挂齐全文 PDF 附件；动库前先预览 PDF 原页摘录，并在独立副本交付 Word 真 EndNote 活引文。",
     "detail": "README.md"
   }
 }

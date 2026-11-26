@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Editable EndNote Citations for Word",
-    "description": "Preview sentence anchors and verbatim PDF page quotes first, then generate live editable Word EndNote CWYW citations on isolated copies.",
+    "title": "Editable EndNote Citations & Cross-Library Handoff",
+    "description": "Reconcile a collaborator's live-cited Word draft against mismatched EndNote record IDs with PDFs attached in the library copy, preview verbatim PDF page quotes first, and deliver live CWYW fields.",
     "detail": "README.en.md"
   }
 }
